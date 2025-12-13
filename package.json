@@ -1,0 +1,16 @@
+{
+  "name": "llm-collab-mc",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "mineflayer": "4.25.0",
+    "vec3": "^0.1.10"
+  },
+  "overrides": {
+    "axios": "^1.13.2",
+    "minecraft-protocol": "1.54.0"
+  }
+}
