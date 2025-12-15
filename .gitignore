@@ -8,3 +8,6 @@ node_modules/
 baselines/outputs/
 baselines/slurm_logs/
 baselines/run.sh
+baselines/run_sbatch.sh
+baselines/config.mc*.yaml
+baselines/baselines/

@@ -10,10 +10,10 @@ dataset:
 
 output:
   # Path is resolved relative to this config file.
-  path: outputs/qwen3_4b_2d_painting.jsonl
+  path: outputs/qwen3_4b_2d_painting_eval.jsonl
   overwrite: false
-  write_prompt: true
-  write_task: true
+  write_prompt: false
+  write_task: false
 
 model:
   backend: transformers
@@ -33,23 +33,44 @@ model:
 
 generation:
   use_chat_template: true
-  max_new_tokens: 2048
+  max_new_tokens: 4096
   do_sample: true
   temperature: 0.2
   top_p: 0.95
   repetition_penalty: 1.05
   num_return_sequences: 1
 
+minecraft:
+  # If true, will connect to a running Minecraft server and execute commands via mineflayer.
+  # If false, it still computes `correct/total` via an offline simulation of /fill and /setblock.
+  enabled: false
+  host: 127.0.0.1
+  port: 25565
+  username: executor_bot
+  version: null
+  # Where to build in the world:
+  # - spawn_offset: world_origin = bot_spawn_floored + spawn_offset
+  # - fixed: world_origin = world_origin (below)
+  origin_mode: spawn_offset # one of: spawn_offset, fixed
+  spawn_offset: [2, 0, 2]
+  world_origin: null
+  reset_before_each: true
+  teleport_before_each: true
+  step_delay_ms: 200
+  scan_delay_ms: 250
+  timeout_ms: 120000
+  max_commands: 600
+
 prompt:
   system: |
     You are a Minecraft building agent.
-    Output must be valid JSON only (no markdown, no code fences, no extra text).
+    Output must be Minecraft commands only (no markdown, no code fences, no extra text).
   user_template: |
     You are given a target 2D painting to build in Minecraft as a 16x16x1 wall.
 
     Coordinates:
-    - Use the given bbox with integer coordinates (x,y,z).
-    - This dataset uses a vertical wall at z=0: x in [0..15], y in [0..15], z=0.
+    - Use the WORLD bbox below with integer absolute coordinates (x,y,z).
+    - This dataset uses a vertical wall at z=constant: x in [0..15], y in [0..15], z=0 (local coords).
 
     Allowed blocks (palette):
     {palette_map}
@@ -57,19 +78,16 @@ prompt:
     Target grid (16 rows, each 16 digits; digit is an index into the palette above):
     {grid_rows}
 
-    Task JSON (for reference):
-    {task_json}
+    WORLD bbox (inclusive):
+    - from: {world_bbox_from}
+    - to:   {world_bbox_to}
 
-    Produce a single JSON object with this schema:
-    {{
-      "role": "builder",
-      "ops": [
-        {{"cmd":"setblock","pos":[x,y,z],"block":"<block_id>"}},
-        {{"cmd":"fill","from":[x1,y1,z1],"to":[x2,y2,z2],"block":"<block_id>"}}
-      ]
-    }}
+    Output format:
+    - Output ONLY a sequence of Minecraft commands, one command per line.
+    - Allowed commands: /setblock, /fill
+    - Use absolute integer coordinates only (no ~).
 
     Constraints:
     - Only use blocks from the palette.
     - Every coordinate must be within the bbox.
-    - Prefer fewer ops (use fill when appropriate).
+    - Do not output any explanations or extra text.

@@ -38,8 +38,10 @@ Important: `op executor_bot` is a Minecraft server/admin command (not a bash com
 
 `python3 test/test_env.py --host 127.0.0.1 --port 25565 --username executor_bot`
 
-## Baselines (offline inference)
+## Baselines (one-shot commands + optional MC eval)
 
 - Edit config: `baselines/config.yaml`
-- Run locally (writes a `.jsonl`): `python3 baselines/main.py --config baselines/config.yaml`
+- If `minecraft.enabled=true`, keep a Minecraft server running and OP the bot username (see smoke test steps above).
+- Run locally (writes `.jsonl` by default): `python3 baselines/main.py --config baselines/config.yaml`
 - Slurm: copy `baselines/run.example.sh` to `baselines/run.sh` (ignored by git), then `bash baselines/run.sh baselines/config.yaml`
+- If you need `minecraft.enabled=true` on Slurm: use `baselines/run_sbatch.example.sh` (see `baselines/README.md`)

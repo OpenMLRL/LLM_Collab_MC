@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -155,6 +157,379 @@ def _extract_json(text: str) -> tuple[Any | None, str | None]:
             continue
 
     return None, "failed to parse JSON"
+
+
+def _strip_markdown_fences(text: str) -> str:
+    raw = text.strip()
+    if not raw:
+        return raw
+    if "```" not in raw:
+        return raw
+
+    parts = raw.split("```")
+    if len(parts) < 3:
+        return raw
+    inner = parts[1].strip()
+    # If the fence language is present, drop it.
+    inner = re.sub(r"^\s*[a-zA-Z0-9_-]+\s*\n", "", inner)
+    return inner.strip()
+
+
+_LEADING_LIST_RE = re.compile(r"^\s*(?:[-*•]+|\d+[.)])\s*")
+
+
+def _normalize_block_id(block_id: str) -> str:
+    s = block_id.strip()
+    if s.startswith("minecraft:"):
+        s = s[len("minecraft:") :]
+    return s
+
+
+def _extract_command_lines(text: str) -> list[str]:
+    raw = _strip_markdown_fences(text)
+    lines: list[str] = []
+    for line in raw.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        s = _LEADING_LIST_RE.sub("", s).strip()
+        if not s:
+            continue
+        lines.append(s)
+    return lines
+
+
+def _parse_int_token(tok: str) -> int | None:
+    t = tok.strip()
+    if not t:
+        return None
+    if t.startswith(("~", "^")):
+        return None
+    try:
+        return int(t)
+    except ValueError:
+        return None
+
+
+def _validate_and_normalize_mc_commands(
+    *,
+    lines: list[str],
+    palette: list[str],
+    world_bbox_from: list[int],
+    world_bbox_to: list[int],
+    max_commands: int,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    allowed_blocks = {_normalize_block_id(b) for b in palette}
+    min_x = min(world_bbox_from[0], world_bbox_to[0])
+    max_x = max(world_bbox_from[0], world_bbox_to[0])
+    min_y = min(world_bbox_from[1], world_bbox_to[1])
+    max_y = max(world_bbox_from[1], world_bbox_to[1])
+    min_z = min(world_bbox_from[2], world_bbox_to[2])
+    max_z = max(world_bbox_from[2], world_bbox_to[2])
+
+    accepted: list[str] = []
+    rejected: list[dict[str, Any]] = []
+
+    def _in_bbox(x: int, y: int, z: int) -> bool:
+        return (min_x <= x <= max_x) and (min_y <= y <= max_y) and (min_z <= z <= max_z)
+
+    for line in lines:
+        if len(accepted) >= max_commands:
+            rejected.append({"line": line, "reason": f"exceeds max_commands={max_commands}"})
+            continue
+
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("/"):
+            stripped = stripped[1:].lstrip()
+
+        parts = stripped.split()
+        if not parts:
+            continue
+        cmd = parts[0].lower()
+
+        if cmd == "setblock":
+            if len(parts) < 5:
+                rejected.append({"line": line, "reason": "setblock needs: /setblock x y z block"})
+                continue
+            x = _parse_int_token(parts[1])
+            y = _parse_int_token(parts[2])
+            z = _parse_int_token(parts[3])
+            if x is None or y is None or z is None:
+                rejected.append({"line": line, "reason": "setblock coords must be absolute integers (no ~)"})
+                continue
+            block = _normalize_block_id(parts[4])
+            if block not in allowed_blocks:
+                rejected.append({"line": line, "reason": f"block not in palette: {block}"})
+                continue
+            if not _in_bbox(x, y, z):
+                rejected.append({"line": line, "reason": "setblock coord out of bbox"})
+                continue
+            accepted.append(f"/setblock {x} {y} {z} {block}")
+            continue
+
+        if cmd == "fill":
+            if len(parts) < 8:
+                rejected.append({"line": line, "reason": "fill needs: /fill x1 y1 z1 x2 y2 z2 block"})
+                continue
+            x1 = _parse_int_token(parts[1])
+            y1 = _parse_int_token(parts[2])
+            z1 = _parse_int_token(parts[3])
+            x2 = _parse_int_token(parts[4])
+            y2 = _parse_int_token(parts[5])
+            z2 = _parse_int_token(parts[6])
+            if None in (x1, y1, z1, x2, y2, z2):
+                rejected.append({"line": line, "reason": "fill coords must be absolute integers (no ~)"})
+                continue
+            block = _normalize_block_id(parts[7])
+            if block not in allowed_blocks:
+                rejected.append({"line": line, "reason": f"block not in palette: {block}"})
+                continue
+            if not (_in_bbox(x1, y1, z1) and _in_bbox(x2, y2, z2)):
+                rejected.append({"line": line, "reason": "fill coord out of bbox"})
+                continue
+            if len(parts) > 8:
+                rejected.append({"line": line, "reason": "fill modes (replace/keep/...) not allowed"})
+                continue
+            accepted.append(f"/fill {x1} {y1} {z1} {x2} {y2} {z2} {block}")
+            continue
+
+        rejected.append({"line": line, "reason": f"unsupported command: {cmd}"})
+
+    return accepted, rejected
+
+
+def _run_mc_executor(
+    *,
+    node_script: Path,
+    host: str,
+    port: int,
+    username: str,
+    version: str | None,
+    step_delay_ms: int,
+    scan_delay_ms: int,
+    timeout_ms: int,
+    pre_commands: list[str],
+    commands: list[str],
+    post_commands: list[str],
+    scan_from: list[int] | None,
+    scan_to: list[int] | None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "pre_commands": pre_commands,
+        "commands": commands,
+        "post_commands": post_commands,
+    }
+    if scan_from is not None and scan_to is not None:
+        payload["scan"] = {"from": scan_from, "to": scan_to}
+
+    cmd = [
+        "node",
+        str(node_script),
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--username",
+        username,
+        "--step-delay-ms",
+        str(step_delay_ms),
+        "--scan-delay-ms",
+        str(scan_delay_ms),
+        "--timeout-ms",
+        str(timeout_ms),
+    ]
+    if version:
+        cmd.extend(["--version", version])
+
+    proc = subprocess.run(
+        cmd,
+        input=json.dumps(payload, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    stdout = (proc.stdout or "").strip()
+    if not stdout:
+        raise RuntimeError(f"mc_executor produced no stdout. stderr:\n{proc.stderr}")
+
+    # mineflayer (or its deps) may print stack traces to stdout; extract the last JSON object line.
+    for line in reversed(stdout.splitlines()):
+        s = line.strip()
+        if not s:
+            continue
+        if not s.startswith("{"):
+            continue
+        try:
+            obj = json.loads(s)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            return obj
+
+    raise RuntimeError(
+        "mc_executor returned no JSON object on stdout.\n"
+        f"returncode={proc.returncode}\n"
+        f"stdout:\n{stdout}\n"
+        f"stderr:\n{proc.stderr}"
+    )
+
+
+def _parse_bbox(bbox_obj: Any) -> tuple[list[int], list[int]]:
+    if not isinstance(bbox_obj, dict):
+        raise ValueError("task.bbox must be an object with from/to")
+    bfrom = bbox_obj.get("from")
+    bto = bbox_obj.get("to")
+    if not (isinstance(bfrom, list) and isinstance(bto, list) and len(bfrom) == 3 and len(bto) == 3):
+        raise ValueError("task.bbox.from/to must be 3-element lists")
+    return [int(bfrom[0]), int(bfrom[1]), int(bfrom[2])], [int(bto[0]), int(bto[1]), int(bto[2])]
+
+
+def _compute_world_bbox(
+    *,
+    local_from: list[int],
+    local_to: list[int],
+    world_origin: list[int],
+) -> tuple[list[int], list[int]]:
+    return (
+        [world_origin[0] + local_from[0], world_origin[1] + local_from[1], world_origin[2] + local_from[2]],
+        [world_origin[0] + local_to[0], world_origin[1] + local_to[1], world_origin[2] + local_to[2]],
+    )
+
+
+def _score_2d_painting(
+    *,
+    task_obj: dict[str, Any],
+    world_origin: list[int],
+    world_scan_blocks: list[dict[str, Any]],
+) -> tuple[int, int, float]:
+    palette = task_obj.get("palette")
+    if not isinstance(palette, list) or not palette:
+        raise ValueError("task.palette must be a non-empty list")
+    palette_norm = [_normalize_block_id(str(b)) for b in palette]
+
+    target = task_obj.get("target_spec") or {}
+    if not isinstance(target, dict):
+        raise ValueError("task.target_spec must be an object")
+    grid_rows = target.get("grid_rows")
+    if not isinstance(grid_rows, list) or not grid_rows:
+        raise ValueError("task.target_spec.grid_rows must be a list of strings")
+    grid_rows_str = [str(r) for r in grid_rows]
+
+    local_from, local_to = _parse_bbox(task_obj.get("bbox"))
+    min_lx = min(local_from[0], local_to[0])
+    max_lx = max(local_from[0], local_to[0])
+    min_ly = min(local_from[1], local_to[1])
+    max_ly = max(local_from[1], local_to[1])
+    min_lz = min(local_from[2], local_to[2])
+    max_lz = max(local_from[2], local_to[2])
+    width = max_lx - min_lx + 1
+    height = max_ly - min_ly + 1
+    depth = max_lz - min_lz + 1
+
+    if len(grid_rows_str) != height:
+        raise ValueError(f"grid_rows height mismatch: got {len(grid_rows_str)}, want {height}")
+    for r in grid_rows_str:
+        if len(r) != width:
+            raise ValueError(f"grid_rows width mismatch: got {len(r)}, want {width}")
+
+    # Build a lookup for observed blocks.
+    observed: dict[tuple[int, int, int], str | None] = {}
+    for b in world_scan_blocks:
+        pos = b.get("pos")
+        name = b.get("name")
+        if not (isinstance(pos, list) and len(pos) == 3):
+            continue
+        x, y, z = int(pos[0]), int(pos[1]), int(pos[2])
+        observed[(x, y, z)] = _normalize_block_id(str(name)) if name is not None else None
+
+    correct = 0
+    total = 0
+    for wy, row in enumerate(grid_rows_str):
+        for wx, ch in enumerate(row):
+            try:
+                idx = int(ch)
+            except ValueError:
+                continue
+            if idx < 0 or idx >= len(palette_norm):
+                continue
+            expected_block = palette_norm[idx]
+            lx = min_lx + wx
+            ly = min_ly + wy
+            for lz in range(min_lz, max_lz + 1):
+                wx_abs = world_origin[0] + lx
+                wy_abs = world_origin[1] + ly
+                wz_abs = world_origin[2] + lz
+                got = observed.get((wx_abs, wy_abs, wz_abs))
+                total += 1
+                if got == expected_block:
+                    correct += 1
+
+    acc = (correct / total) if total else 0.0
+    return correct, total, acc
+
+
+def _simulate_commands_to_scan_blocks(
+    *,
+    commands: list[str],
+    world_bbox_from: list[int],
+    world_bbox_to: list[int],
+) -> list[dict[str, Any]]:
+    min_x = min(world_bbox_from[0], world_bbox_to[0])
+    max_x = max(world_bbox_from[0], world_bbox_to[0])
+    min_y = min(world_bbox_from[1], world_bbox_to[1])
+    max_y = max(world_bbox_from[1], world_bbox_to[1])
+    min_z = min(world_bbox_from[2], world_bbox_to[2])
+    max_z = max(world_bbox_from[2], world_bbox_to[2])
+
+    state: dict[tuple[int, int, int], str] = {}
+
+    def _set(x: int, y: int, z: int, block: str) -> None:
+        state[(x, y, z)] = _normalize_block_id(block)
+
+    for cmd in commands:
+        stripped = cmd.strip()
+        if stripped.startswith("/"):
+            stripped = stripped[1:].lstrip()
+        parts = stripped.split()
+        if not parts:
+            continue
+        name = parts[0].lower()
+        if name == "setblock" and len(parts) >= 5:
+            x = int(parts[1])
+            y = int(parts[2])
+            z = int(parts[3])
+            block = parts[4]
+            _set(x, y, z, block)
+            continue
+        if name == "fill" and len(parts) >= 8:
+            x1 = int(parts[1])
+            y1 = int(parts[2])
+            z1 = int(parts[3])
+            x2 = int(parts[4])
+            y2 = int(parts[5])
+            z2 = int(parts[6])
+            block = parts[7]
+            fx1 = min(x1, x2)
+            fx2 = max(x1, x2)
+            fy1 = min(y1, y2)
+            fy2 = max(y1, y2)
+            fz1 = min(z1, z2)
+            fz2 = max(z1, z2)
+            for y in range(fy1, fy2 + 1):
+                for x in range(fx1, fx2 + 1):
+                    for z in range(fz1, fz2 + 1):
+                        _set(x, y, z, block)
+            continue
+
+    blocks: list[dict[str, Any]] = []
+    for y in range(min_y, max_y + 1):
+        for x in range(min_x, max_x + 1):
+            for z in range(min_z, max_z + 1):
+                blocks.append({"pos": [x, y, z], "name": state.get((x, y, z), "air")})
+    return blocks
 
 
 @dataclass(frozen=True)
@@ -386,11 +761,17 @@ def main() -> int:
             task = _load_json(path)
             if not isinstance(task, dict):
                 continue
+            bbox_from, bbox_to = _parse_bbox(task.get("bbox"))
+            # For dry-run we assume local coords only.
+            world_bbox_from = bbox_from
+            world_bbox_to = bbox_to
             user_prompt = user_template.format(
                 task_json=json.dumps(task, ensure_ascii=False, separators=(",", ":")),
                 task_id=task.get("task_id", path.stem),
                 palette_map=_format_palette_map(task.get("palette")),
                 grid_rows=_format_grid_rows(task),
+                world_bbox_from=json.dumps(world_bbox_from, separators=(",", ":")),
+                world_bbox_to=json.dumps(world_bbox_to, separators=(",", ":")),
             )
             _eprint(f"\n=== {task.get('task_id', path.stem)} ===\n{user_prompt}\n")
         return 0
@@ -431,8 +812,116 @@ def main() -> int:
     _eprint(f"Tasks: {len(task_paths)}")
     _eprint(f"Output: {output_path}")
 
-    open_mode = "w" if overwrite else "w"
-    with output_path.open(open_mode, encoding="utf-8") as out_f:
+    mc_cfg = cfg.get("minecraft") or {}
+    if not isinstance(mc_cfg, dict):
+        raise ValueError("minecraft must be a mapping")
+
+    mc_enabled = bool(mc_cfg.get("enabled", False))
+    mc_host = str(mc_cfg.get("host") or "127.0.0.1")
+    mc_port = int(mc_cfg.get("port") or 25565)
+    mc_username = str(mc_cfg.get("username") or "executor_bot")
+    mc_version = mc_cfg.get("version")
+    mc_version = str(mc_version) if mc_version not in (None, "null") else None
+    mc_origin_mode = str(mc_cfg.get("origin_mode") or "fixed").strip().lower()
+    mc_spawn_offset = mc_cfg.get("spawn_offset") or [0, 0, 0]
+    if not (isinstance(mc_spawn_offset, list) and len(mc_spawn_offset) == 3):
+        raise ValueError("minecraft.spawn_offset must be a 3-element list")
+    mc_spawn_offset_vec = [int(mc_spawn_offset[0]), int(mc_spawn_offset[1]), int(mc_spawn_offset[2])]
+    mc_world_origin_cfg = mc_cfg.get("world_origin")
+    mc_world_origin_vec: list[int] | None = None
+    if mc_world_origin_cfg is not None:
+        if not (isinstance(mc_world_origin_cfg, list) and len(mc_world_origin_cfg) == 3):
+            raise ValueError("minecraft.world_origin must be a 3-element list or null")
+        mc_world_origin_vec = [int(mc_world_origin_cfg[0]), int(mc_world_origin_cfg[1]), int(mc_world_origin_cfg[2])]
+
+    mc_reset_before_each = bool(mc_cfg.get("reset_before_each", True))
+    mc_teleport_before_each = bool(mc_cfg.get("teleport_before_each", True))
+    mc_step_delay_ms = int(mc_cfg.get("step_delay_ms") or 200)
+    mc_scan_delay_ms = int(mc_cfg.get("scan_delay_ms") or 250)
+    mc_timeout_ms = int(mc_cfg.get("timeout_ms") or 120_000)
+    mc_max_commands = int(mc_cfg.get("max_commands") or 600)
+
+    node_script = Path(__file__).resolve().parent / "mc_executor.cjs"
+    if mc_enabled and not node_script.exists():
+        raise FileNotFoundError(f"Missing node executor script: {node_script}")
+
+    world_origin: list[int] | None = None
+    if mc_enabled:
+        if mc_origin_mode == "fixed":
+            if mc_world_origin_vec is None:
+                raise ValueError("minecraft.world_origin is required when origin_mode=fixed")
+            world_origin = mc_world_origin_vec
+        elif mc_origin_mode == "spawn_offset":
+            probe = _run_mc_executor(
+                node_script=node_script,
+                host=mc_host,
+                port=mc_port,
+                username=mc_username,
+                version=mc_version,
+                step_delay_ms=mc_step_delay_ms,
+                scan_delay_ms=mc_scan_delay_ms,
+                timeout_ms=mc_timeout_ms,
+                pre_commands=[],
+                commands=[],
+                post_commands=[],
+                scan_from=None,
+                scan_to=None,
+            )
+            if not bool(probe.get("ok", False)):
+                raise RuntimeError(
+                    "Failed to connect to Minecraft server for origin probe (origin_mode=spawn_offset). "
+                    f"host={mc_host} port={mc_port} username={mc_username} errors={probe.get('errors')}"
+                )
+            spawn = probe.get("spawn_floored")
+            if not (isinstance(spawn, list) and len(spawn) == 3):
+                raise RuntimeError(
+                    "minecraft.origin_mode=spawn_offset requires mc_executor to return spawn_floored=[x,y,z]. "
+                    "Update baselines/mc_executor.cjs accordingly."
+                )
+            world_origin = [
+                int(spawn[0]) + mc_spawn_offset_vec[0],
+                int(spawn[1]) + mc_spawn_offset_vec[1],
+                int(spawn[2]) + mc_spawn_offset_vec[2],
+            ]
+        else:
+            raise ValueError("minecraft.origin_mode must be one of: fixed, spawn_offset")
+
+        _eprint(f"Minecraft enabled: host={mc_host} port={mc_port} username={mc_username} origin={world_origin}")
+
+    def _open_output_writer(path: Path):
+        if path.suffix.lower() == ".jsonl":
+            f = path.open("w", encoding="utf-8")
+
+            def write_record(rec: dict[str, Any]) -> None:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                f.flush()
+
+            def close() -> None:
+                f.close()
+
+            return write_record, close
+
+        # Default: write a JSON array incrementally.
+        f = path.open("w", encoding="utf-8")
+        f.write("[\n")
+        first = True
+
+        def write_record(rec: dict[str, Any]) -> None:
+            nonlocal first
+            if not first:
+                f.write(",\n")
+            first = False
+            f.write(json.dumps(rec, ensure_ascii=False))
+            f.flush()
+
+        def close() -> None:
+            f.write("\n]\n")
+            f.close()
+
+        return write_record, close
+
+    write_record, close_writer = _open_output_writer(output_path)
+    try:
         for idx, path in enumerate(task_paths, start=1):
             task_obj = _load_json(path)
             if not isinstance(task_obj, dict):
@@ -442,11 +931,19 @@ def main() -> int:
             task_id = str(task_obj.get("task_id") or path.stem)
             palette_map = _format_palette_map(task_obj.get("palette"))
             grid_rows = _format_grid_rows(task_obj)
+
+            local_from, local_to = _parse_bbox(task_obj.get("bbox"))
+            w_from = local_from
+            w_to = local_to
+            if world_origin is not None:
+                w_from, w_to = _compute_world_bbox(local_from=local_from, local_to=local_to, world_origin=world_origin)
             user_prompt = user_template.format(
                 task_json=json.dumps(task_obj, ensure_ascii=False, separators=(",", ":")),
                 task_id=task_id,
                 palette_map=palette_map,
                 grid_rows=grid_rows,
+                world_bbox_from=json.dumps(w_from, separators=(",", ":")),
+                world_bbox_to=json.dumps(w_to, separators=(",", ":")),
             )
 
             prompt_text, chat_messages = _render_prompt(
@@ -461,7 +958,85 @@ def main() -> int:
             dt = time.time() - t0
 
             for sample_id, output_text in enumerate(outputs):
-                parsed, parse_error = _extract_json(output_text)
+                lines = _extract_command_lines(output_text)
+                palette = task_obj.get("palette")
+                if not isinstance(palette, list):
+                    palette = []
+                accepted_cmds, rejected_cmds = _validate_and_normalize_mc_commands(
+                    lines=lines,
+                    palette=[str(b) for b in palette],
+                    world_bbox_from=w_from,
+                    world_bbox_to=w_to,
+                    max_commands=mc_max_commands,
+                )
+
+                mc_result: dict[str, Any] | None = None
+                metrics: dict[str, Any] = {"latency_s": dt}
+
+                # Offline eval: simulate /fill + /setblock and score within bbox.
+                score_origin = world_origin if world_origin is not None else [0, 0, 0]
+                try:
+                    sim_blocks = _simulate_commands_to_scan_blocks(
+                        commands=accepted_cmds,
+                        world_bbox_from=w_from,
+                        world_bbox_to=w_to,
+                    )
+                    correct, total, acc = _score_2d_painting(
+                        task_obj=task_obj,
+                        world_origin=score_origin,
+                        world_scan_blocks=sim_blocks,
+                    )
+                    metrics.update({"correct": correct, "total": total, "accuracy": acc})
+                except Exception as e:
+                    metrics.update({"correct": 0, "total": 0, "accuracy": 0.0, "sim_error": str(e)})
+                if mc_enabled and world_origin is not None:
+                    # Pre-commands: teleport near the target area and clear it.
+                    min_x = min(w_from[0], w_to[0])
+                    max_x = max(w_from[0], w_to[0])
+                    min_y = min(w_from[1], w_to[1])
+                    max_y = max(w_from[1], w_to[1])
+                    min_z = min(w_from[2], w_to[2])
+                    max_z = max(w_from[2], w_to[2])
+                    tp_x = (min_x + max_x) // 2
+                    tp_y = min_y
+                    tp_z = max_z + 2
+
+                    pre_cmds: list[str] = []
+                    if mc_teleport_before_each:
+                        pre_cmds.append(f"/tp {mc_username} {tp_x} {tp_y} {tp_z}")
+                    if mc_reset_before_each:
+                        pre_cmds.append(f"/fill {min_x} {min_y} {min_z} {max_x} {max_y} {max_z} air")
+
+                    try:
+                        mc_result = _run_mc_executor(
+                            node_script=node_script,
+                            host=mc_host,
+                            port=mc_port,
+                            username=mc_username,
+                            version=mc_version,
+                            step_delay_ms=mc_step_delay_ms,
+                            scan_delay_ms=mc_scan_delay_ms,
+                            timeout_ms=mc_timeout_ms,
+                            pre_commands=pre_cmds,
+                            commands=accepted_cmds,
+                            post_commands=[],
+                            scan_from=[min_x, min_y, min_z],
+                            scan_to=[max_x, max_y, max_z],
+                        )
+                        scan = (mc_result.get("scan") or {}) if isinstance(mc_result, dict) else {}
+                        scan_blocks = scan.get("blocks") if isinstance(scan, dict) else None
+                        if isinstance(scan_blocks, list):
+                            mc_correct, mc_total, mc_acc = _score_2d_painting(
+                                task_obj=task_obj,
+                                world_origin=world_origin,
+                                world_scan_blocks=scan_blocks,
+                            )
+                            metrics.update({"mc_correct": mc_correct, "mc_total": mc_total, "mc_accuracy": mc_acc})
+                        else:
+                            metrics.update({"mc_error": "missing scan blocks"})
+                    except Exception as e:
+                        metrics.update({"mc_error": str(e)})
+
                 record: dict[str, Any] = {
                     "run_name": run_name,
                     "task_id": task_id,
@@ -472,14 +1047,20 @@ def main() -> int:
                         "model_id": loaded.model_id,
                     },
                     "generation": generation_cfg,
-                    "metrics": {
-                        "latency_s": dt,
-                    },
+                    "metrics": metrics,
                     "output_text": output_text,
-                    "parsed_json": parsed,
-                    "parse_error": parse_error,
+                    "commands": accepted_cmds,
+                    "rejected_commands": rejected_cmds,
+                    "mc_result": mc_result,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
+                if "correct" in metrics and "total" in metrics:
+                    record["correct"] = metrics.get("correct")
+                    record["total"] = metrics.get("total")
+                    try:
+                        record["correct_over_total"] = f"{int(metrics.get('correct'))}/{int(metrics.get('total'))}"
+                    except Exception:
+                        record["correct_over_total"] = None
                 if write_task:
                     record["task"] = task_obj
                 if write_prompt:
@@ -490,10 +1071,11 @@ def main() -> int:
                         "chat_messages": chat_messages,
                     }
 
-                out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
-                out_f.flush()
+                write_record(record)
 
             _eprint(f"[{idx}/{len(task_paths)}] {task_id} samples={len(outputs)} {dt:.2f}s")
+    finally:
+        close_writer()
 
     return 0
 
