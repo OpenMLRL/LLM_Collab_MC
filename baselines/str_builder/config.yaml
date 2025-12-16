@@ -1,0 +1,94 @@
+run_name: qwen3_4b_str_builder
+seed: 1234
+
+dataset:
+  # Path is resolved relative to this config file.
+  csv_path: ../../dataset/str_builder/data.csv
+
+task:
+  # 5x7 block font with 1-column spacing between letters.
+  spacing: 1
+  local_z: 0
+  # Two-block checkerboard to guarantee all 4-neighbor adjacencies differ.
+  block_even: white_concrete
+  block_odd: black_concrete
+  # S_shape = exp(-CD / sigma)
+  chamfer_sigma: 2.0
+
+output:
+  # Path is resolved relative to this config file.
+  path: outputs/qwen3_4b_str_builder_eval.jsonl
+  overwrite: false
+  write_prompt: false
+  write_task: false
+
+model:
+  backend: transformers
+  model_name_or_path: Qwen/Qwen3-4B-Instruct-2507
+  tokenizer_name_or_path: null
+  trust_remote_code: true
+  revision: null
+  dtype: bfloat16 # one of: float16, bfloat16, float32
+  device_map: auto # e.g. auto, cuda:0, cpu
+  load_in_4bit: false
+  load_in_8bit: false
+
+generation:
+  use_chat_template: true
+  max_new_tokens: 1024
+  do_sample: true
+  temperature: 0.2
+  top_p: 0.95
+  repetition_penalty: 1.05
+  num_return_sequences: 1
+
+minecraft:
+  enabled: false
+  host: 127.0.0.1
+  port: 25565
+  username: executor_bot
+  version: null
+  origin_mode: spawn_offset # one of: spawn_offset, fixed
+  spawn_offset: [2, 0, 2]
+  world_origin: null
+  reset_before_each: true
+  teleport_before_each: true
+  step_delay_ms: 200
+  scan_delay_ms: 250
+  timeout_ms: 120000
+  max_commands: 600
+
+prompt:
+  system: |
+    You are a Minecraft building agent.
+    Output must be Minecraft commands only (no markdown, no code fences, no extra text).
+  user_template: |
+    Build the following uppercase string as 5x7 block letters on a 2D plane (z is constant).
+
+    String: {text}
+    Difficulty: {difficulty}
+
+    Target mask (top row is y=max_y, '.' empty, '#' place a block):
+    {target_rows}
+
+    WORLD bbox (inclusive):
+    - from: {world_bbox_from}
+    - to:   {world_bbox_to}
+
+    Coordinate mapping (absolute coords):
+    - Let (min_x, min_y, min_z) be bbox.from and (max_x, max_y, max_z) be bbox.to.
+    - Mask column c (0-based from left) maps to x = min_x + c.
+    - Mask row r (0-based from top) maps to y = max_y - r.
+    - z is constant (min_z == max_z).
+
+    Allowed blocks:
+    - EVEN (x+y even): {block_even}
+    - ODD  (x+y odd):  {block_odd}
+
+    Constraints:
+    - Output ONLY Minecraft commands, one per line.
+    - Allowed commands: /setblock, /fill
+    - Use absolute integer coordinates only (no ~).
+    - Build ONLY the letter blocks (#). Do NOT build a background/canvas.
+    - Material rule: use EVEN block if (x+y) is even, else ODD block (so adjacent 4-neighbors always differ).
+    - Every coordinate must be within the bbox.
