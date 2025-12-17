@@ -28,6 +28,15 @@ Useful flags:
 - `--limit N`: only run first N tasks
 - `--dry-run`: don’t load model, just show prompts
 
+## Output
+
+This baseline writes **two** JSONL files per run:
+
+- Main output: `output.path` from `baselines/str_builder/config.yaml`
+- Simplified output: `output.simple_path` (optional); defaults to `{output.path.stem}.simple.jsonl`
+
+The simplified JSONL keeps only: `task_id/string/difficulty`, `model_id`, and the 3 scores (`score_shape_overlap`, `score_components`, `score_material_adjacent`).
+
 ## Metrics (offline + optional MC scan)
 
 Each record writes:
@@ -38,4 +47,3 @@ Each record writes:
 - `metrics.score_mean`: mean of the three scores above
 
 If Minecraft execution is enabled and scan succeeds, the same metrics are also written with `mc_` prefixes.
-

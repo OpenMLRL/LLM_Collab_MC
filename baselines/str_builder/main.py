@@ -860,13 +860,22 @@ def main() -> int:
         raise ValueError("output must be a mapping")
     output_path = _resolve_path(config_path, output_cfg.get("path")) or (config_path.parent / "outputs/output.jsonl")
     output_path = output_path.resolve()
+    output_simple_path = _resolve_path(config_path, output_cfg.get("simple_path"))
+    if output_simple_path is None:
+        output_simple_path = output_path.with_name(output_path.stem + ".simple.jsonl")
+    output_simple_path = output_simple_path.resolve()
+    if output_simple_path == output_path:
+        raise ValueError("output.simple_path must be different from output.path")
     overwrite = bool(output_cfg.get("overwrite", False))
     write_prompt = bool(output_cfg.get("write_prompt", True))
     write_task = bool(output_cfg.get("write_task", True))
 
     if output_path.exists() and not overwrite:
         raise FileExistsError(f"Output exists (set output.overwrite=true to overwrite): {output_path}")
+    if output_simple_path.exists() and not overwrite:
+        raise FileExistsError(f"Simple output exists (set output.overwrite=true to overwrite): {output_simple_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_simple_path.parent.mkdir(parents=True, exist_ok=True)
 
     prompt_cfg = cfg.get("prompt") or {}
     if not isinstance(prompt_cfg, dict):
@@ -940,6 +949,7 @@ def main() -> int:
     _eprint(f"Loaded model: {loaded.model_id}")
     _eprint(f"Tasks: {len(tasks)}")
     _eprint(f"Output: {output_path}")
+    _eprint(f"Output(simple): {output_simple_path}")
 
     mc_cfg = cfg.get("minecraft") or {}
     if not isinstance(mc_cfg, dict):
@@ -1048,8 +1058,31 @@ def main() -> int:
 
         return write_record, close
 
+    def _open_jsonl_writer(path: Path):
+        f = path.open("w", encoding="utf-8")
+
+        def write_record(rec: dict[str, Any]) -> None:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            f.flush()
+
+        def close() -> None:
+            f.close()
+
+        return write_record, close
+
+    def _pick_primary_metric(metrics: dict[str, Any], key: str) -> float | None:
+        mc_key = f"mc_{key}"
+        v = metrics.get(mc_key)
+        if isinstance(v, (int, float)):
+            return float(v)
+        v = metrics.get(key)
+        if isinstance(v, (int, float)):
+            return float(v)
+        return None
+
     allowed_blocks = [block_even, block_odd]
     write_record, close_writer = _open_output_writer(output_path)
+    write_simple_record, close_simple_writer = _open_jsonl_writer(output_simple_path)
     try:
         for idx, task in enumerate(tasks, start=1):
             local_from = task.local_bbox_from
@@ -1230,14 +1263,25 @@ def main() -> int:
                     }
 
                 write_record(record)
+                write_simple_record(
+                    {
+                        "task_id": task.task_id,
+                        "string": task.text,
+                        "difficulty": task.difficulty,
+                        "model_id": loaded.model_id,
+                        "score_shape_overlap": _pick_primary_metric(metrics, "score_shape_overlap"),
+                        "score_components": _pick_primary_metric(metrics, "score_components"),
+                        "score_material_adjacent": _pick_primary_metric(metrics, "score_material_adjacent"),
+                    }
+                )
 
             _eprint(f"[{idx}/{len(tasks)}] {task.task_id} samples={len(outputs)} {dt:.2f}s")
     finally:
         close_writer()
+        close_simple_writer()
 
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
