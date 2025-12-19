@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+import re
 
 from comlrl.trainers.magrpo import MAGRPOTrainer  # type: ignore
 
@@ -103,10 +104,52 @@ def patch_single_agent_returns() -> None:
         pass
 
 
+def patch_debug_turn_tracking() -> None:
+    try:
+        orig = MAGRPOTrainer._generate_completions_with_external_prompts  # type: ignore[attr-defined]
+    except Exception:
+        return
+
+    turn_re = re.compile(r"\bturn\s*[:#-]?\s*(\d+)\b", re.IGNORECASE)
+
+    def wrapped(self, agent, batch_items, agent_idx=0, num_return_sequences=1, max_new_tokens=128, external_prompts=None, **kwargs):
+        turn_idx = 1
+        if external_prompts is not None:
+            try:
+                m = turn_re.search(str(external_prompts))
+                if m:
+                    turn_idx = int(m.group(1))
+                else:
+                    turn_idx = 2
+            except Exception:
+                turn_idx = 2
+        for item in batch_items or []:
+            try:
+                item["_str_builder_turn"] = int(turn_idx)
+            except Exception:
+                pass
+        return orig(
+            self,
+            agent,
+            batch_items,
+            agent_idx=agent_idx,
+            num_return_sequences=num_return_sequences,
+            max_new_tokens=max_new_tokens,
+            external_prompts=external_prompts,
+            **kwargs,
+        )
+
+    try:
+        MAGRPOTrainer._generate_completions_with_external_prompts = wrapped  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+
 def apply_default_patches(cfg: Dict[str, Any] | None = None) -> None:
     gates = (cfg or {}).get("patches", {}) if isinstance(cfg, dict) else {}
     if gates.get("generation_memory", True):
         patch_trainer_generation_for_memory()
     if gates.get("single_agent_returns", True):
         patch_single_agent_returns()
-
+    if gates.get("debug_turn_tracking", True):
+        patch_debug_turn_tracking()

@@ -135,7 +135,14 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             lines.append("".join(out))
         return "\n".join(lines)
 
-    def _maybe_debug_print(*, task: TaskSpec, reward: float, metrics: Mapping[str, Any], blocks: List[Mapping[str, Any]]) -> None:
+    def _maybe_debug_print(
+        *,
+        task: TaskSpec,
+        reward: float,
+        metrics: Mapping[str, Any],
+        blocks: List[Mapping[str, Any]],
+        turn_idx: int | None,
+    ) -> None:
         if not debug_enabled:
             return
         debug_state["calls"] += 1
@@ -144,8 +151,9 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         if debug_every_n_calls > 0 and (debug_state["calls"] % debug_every_n_calls) != 0:
             return
         debug_state["printed"] += 1
+        turn_str = f" turn={int(turn_idx)}" if turn_idx is not None else ""
         prefix = (
-            f"[str_builder debug] {task.task_id} text={task.text!r} diff={task.difficulty} "
+            f"[str_builder debug] {task.task_id} text={task.text!r} diff={task.difficulty}{turn_str} "
             f"reward={reward:.4f} "
             f"s1={float(metrics.get('score_shape_overlap', 0.0)):.3f} "
             f"s2={float(metrics.get('score_components', 0.0)):.3f} "
@@ -160,6 +168,9 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         def reward_fn(agent1_completions: List[str], *, batch_items: List[Mapping[str, Any]] | None = None) -> List[float]:
             batch_item = (batch_items or [{}])[0]
             task = _task_from_batch_item(batch_item)
+            turn_idx = None
+            if isinstance(batch_item, Mapping):
+                turn_idx = batch_item.get("_str_builder_turn")
             world_bbox_from = task.local_bbox_from
             world_bbox_to = task.local_bbox_to
 
@@ -176,7 +187,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             blocks = simulate_commands_to_scan_blocks(commands=accepted, world_bbox_from=world_bbox_from, world_bbox_to=world_bbox_to)
             metrics = score_str_builder(task=task, world_origin=[0, 0, 0], world_scan_blocks=blocks, chamfer_sigma=chamfer_sigma)
             reward = _reward_from_metrics(metrics)
-            _maybe_debug_print(task=task, reward=reward, metrics=metrics, blocks=blocks)
+            _maybe_debug_print(task=task, reward=reward, metrics=metrics, blocks=blocks, turn_idx=turn_idx)
             return [reward]
 
         return reward_fn
@@ -196,6 +207,9 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
     ) -> List[float]:
         batch_item = (batch_items or [{}])[0]
         task = _task_from_batch_item(batch_item)
+        turn_idx = None
+        if isinstance(batch_item, Mapping):
+            turn_idx = batch_item.get("_str_builder_turn")
         world_bbox_from = task.local_bbox_from
         world_bbox_to = task.local_bbox_to
 
@@ -223,7 +237,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         blocks = simulate_commands_to_scan_blocks(commands=merged, world_bbox_from=world_bbox_from, world_bbox_to=world_bbox_to)
         metrics = score_str_builder(task=task, world_origin=[0, 0, 0], world_scan_blocks=blocks, chamfer_sigma=chamfer_sigma)
         reward = _reward_from_metrics(metrics)
-        _maybe_debug_print(task=task, reward=reward, metrics=metrics, blocks=blocks)
+        _maybe_debug_print(task=task, reward=reward, metrics=metrics, blocks=blocks, turn_idx=turn_idx)
         return [reward]
 
     return reward_fn

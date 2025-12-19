@@ -28,6 +28,13 @@ def format_followup_prompts(
     if len(agent_completions) != n:
         raise ValueError(f"Expected {n} agent completions, got {len(agent_completions)}")
 
+    turn_number = 1
+    if prompt_history_per_agent and prompt_history_per_agent[0] is not None:
+        try:
+            turn_number = len(prompt_history_per_agent[0]) + 1
+        except Exception:
+            turn_number = 1
+
     system_prompt = str(ctx.get("system_prompt") or "").rstrip()
     user_prompt_single = str(ctx.get("user_prompt_single") or "").rstrip()
     user_prompt_agent1 = str(ctx.get("user_prompt_agent1") or user_prompt_single).rstrip()
@@ -80,7 +87,9 @@ def format_followup_prompts(
     feedback = "\n".join(
         [
             "Feedback (ASCII maps):",
-            "- Target mask: '.' empty, '#' should place a block (any allowed type).",
+            f"- Turn: {turn_number}",
+            "- Target mask: '.' empty, '#' should place a block (should be allowed type).",
+            "- For target '.' positions, you should place air.",
             "- Current progress: '.' empty, '#' missing target, letters = first letter of the placed block color.",
             "- Deletion is allowed: use /setblock ... air or /fill ... air to remove blocks.",
             "",
