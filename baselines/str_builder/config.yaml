@@ -1,5 +1,5 @@
 run_name: qwen3_4b_str_builder
-seed: 1234
+seed: 42
 
 agents:
   # 1 = single agent (current behavior)

@@ -32,7 +32,7 @@ prompt:
 
   # Single-agent prompt.
   user_template: |
-    Build the following uppercase string as 5x7 block letters on a 2D plane (z is constant).
+    Build the following uppercase string as 5x5 block letters on a 2D plane (z is constant).
 
     String: {text}
     Difficulty: {difficulty}
@@ -62,7 +62,7 @@ prompt:
   user_template_agent1: |
     You are Agent 1 in a 2-person Minecraft building team. You will place SOME of the blocks for the final build.
 
-    Task: Build the uppercase string as 5x7 block letters on a 2D plane (z is constant).
+    Task: Build the uppercase string as 5x5 block letters on a 2D plane (z is constant).
     String: {text}
     Difficulty: {difficulty}
 
@@ -90,7 +90,7 @@ prompt:
   user_template_agent2: |
     You are Agent 2 in a 2-person Minecraft building team. You will place SOME of the blocks for the final build.
 
-    Task: Build the uppercase string as 5x7 block letters on a 2D plane (z is constant).
+    Task: Build the uppercase string as 5x5 block letters on a 2D plane (z is constant).
     String: {text}
     Difficulty: {difficulty}
 
@@ -138,12 +138,12 @@ model:
 trainer:
   # Set by scripts (supports [jobid] placeholder).
   output_dir: TODO
-  num_train_epochs: 10
+  num_train_epochs: 20
   per_device_train_batch_size: 1
   learning_rate: 3e-5
   logging_steps: 20
   save_steps: 200
-  num_generations: 4
+  num_generations: 3
   max_new_tokens: 1024
   temperature: 0.2
   top_p: 0.95
