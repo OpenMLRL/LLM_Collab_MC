@@ -6,18 +6,18 @@ seed: 42
 
 collab:
   # GRPO = num_agents=1. (CoMLRL's MAGRPOTrainer supports num_agents>=1.)
-  num_agents: 1
+  num_agents: 2
 
 data:
   # Path is resolved relative to this config file.
-  csv_path: ../dataset/str_builder/data4_easy.csv
+  csv_path: ../dataset/str_builder/one.csv
   split_ratio: 0.8
   spacing: 1
   local_z: 0
 
 task:
   # Allowed blocks for agent1 (and single-agent).
-  block_agent1: [black_concrete]
+  block_agent1: [black_concrete, white_concrete]
   # Allowed blocks for agent2 (only used when collab.num_agents=2).
   block_agent2: [red_concrete]
   # Cap accepted commands per agent (extra commands are rejected for reward).

@@ -15,11 +15,10 @@ task:
   # 5x5 block font with 1-column spacing between letters.
   spacing: 1
   local_z: 0
-  # Single block type the agent may use.
-  block_even: black_concrete
-  block_odd: black_concrete
-  # Agent2 block (num_agents=2).
-  block_agent2: red_concrete
+  # Allowed blocks for agent1 (and single-agent).
+  block_agent1: [black_concrete]
+  # Allowed blocks for agent2 (num_agents=2).
+  block_agent2: [red_concrete]
   # S_shape = exp(-CD / sigma)
   chamfer_sigma: 2.0
 
@@ -34,7 +33,7 @@ output:
 
 model:
   backend: transformers
-  model_name_or_path: Qwen/Qwen3-7B
+  model_name_or_path: Qwen/Qwen2.5-7B-Instruct
   tokenizer_name_or_path: null
   trust_remote_code: true
   revision: null
@@ -89,8 +88,7 @@ prompt:
     - z is constant (min_z == max_z).
 
     Available blocks (use ONLY these):
-    - {block_even}
-    - {block_odd}
+    {block_agent1_lines}
 
     Constraints:
     - Output ONLY Minecraft commands, one per line.
@@ -98,6 +96,7 @@ prompt:
     - Deletion is allowed: use /setblock ... air or /fill ... air to remove blocks.
     - Use absolute integer coordinates only (no ~).
     - Build ONLY the letters. Do NOT build a background/canvas.
+    - Place exactly one empty column between adjacent letters.
     - Every coordinate must be within the bbox.
 
   # Optional overrides used when agents.num_agents=2.
@@ -119,8 +118,7 @@ prompt:
     - z is constant (min_z == max_z).
 
     Available blocks (use ONLY these):
-    - {block_even}
-    - {block_odd}
+    {block_agent1_lines}
 
     Constraints:
     - Output ONLY Minecraft commands, one per line.
@@ -128,6 +126,7 @@ prompt:
     - Deletion is allowed: use /setblock ... air or /fill ... air to remove blocks.
     - Use absolute integer coordinates only (no ~).
     - Build ONLY the letters. Do NOT build a background/canvas.
+    - Place exactly one empty column between adjacent letters.
     - Every coordinate must be within the bbox.
 
   user_template_agent2: |
@@ -147,8 +146,8 @@ prompt:
     - y increases from min_y to max_y (bottom to top).
     - z is constant (min_z == max_z).
 
-    Available blocks (use ONLY this block):
-    - {block_agent2}
+    Available blocks (use ONLY these):
+    {block_agent2_lines}
 
     Constraints:
     - Output ONLY Minecraft commands, one per line.
@@ -156,4 +155,5 @@ prompt:
     - Deletion is allowed: use /setblock ... air or /fill ... air to remove blocks.
     - Use absolute integer coordinates only (no ~).
     - Build ONLY the letters. Do NOT build a background/canvas.
+    - Place exactly one empty column between adjacent letters.
     - Every coordinate must be within the bbox.

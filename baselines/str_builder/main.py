@@ -962,9 +962,36 @@ def main() -> int:
         raise ValueError("task must be a mapping")
     spacing = int(task_cfg.get("spacing") or 1)
     local_z = int(task_cfg.get("local_z") or 0)
-    block_even = str(task_cfg.get("block_even") or "white_concrete")
-    block_odd = str(task_cfg.get("block_odd") or "black_concrete")
-    block_agent2 = str(task_cfg.get("block_agent2") or "red_concrete")
+
+    def _as_block_list(v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, (list, tuple)):
+            out: list[str] = []
+            for x in v:
+                s = str(x).strip()
+                if s:
+                    out.append(s)
+            return out
+        s = str(v).strip()
+        return [s] if s else []
+
+    block_agent1_blocks = _as_block_list(task_cfg.get("block_agent1"))
+    if not block_agent1_blocks:
+        b0 = str(task_cfg.get("block_even") or "white_concrete").strip()
+        b1 = str(task_cfg.get("block_odd") or "black_concrete").strip()
+        block_agent1_blocks = [b0 or "white_concrete", b1 or "black_concrete"]
+
+    block_agent2_blocks = _as_block_list(task_cfg.get("block_agent2"))
+    if not block_agent2_blocks:
+        block_agent2_blocks = ["red_concrete"]
+
+    block_agent1_lines = "\n".join(f"- {b}" for b in block_agent1_blocks)
+    block_agent2_lines = "\n".join(f"- {b}" for b in block_agent2_blocks)
+
+    block_even = block_agent1_blocks[0] if block_agent1_blocks else "white_concrete"
+    block_odd = block_agent1_blocks[1] if len(block_agent1_blocks) > 1 else block_even
+    block_agent2 = block_agent2_blocks[0] if block_agent2_blocks else "red_concrete"
     chamfer_sigma = float(task_cfg.get("chamfer_sigma") or 2.0)
 
     dataset_cfg = cfg.get("dataset") or {}
@@ -1052,6 +1079,8 @@ def main() -> int:
                     text=task.text,
                     difficulty=task.difficulty,
                     target_rows="\n".join(task.target_rows_topdown),
+                    block_agent1_lines=block_agent1_lines,
+                    block_agent2_lines=block_agent2_lines,
                     block_even=block_even,
                     block_odd=block_odd,
                     block_agent2=block_agent2,
@@ -1076,6 +1105,8 @@ def main() -> int:
                 text=task.text,
                 difficulty=task.difficulty,
                 target_rows="\n".join(task.target_rows_topdown),
+                block_agent1_lines=block_agent1_lines,
+                block_agent2_lines=block_agent2_lines,
                 block_even=block_even,
                 block_odd=block_odd,
                 block_agent2=block_agent2,
@@ -1097,6 +1128,8 @@ def main() -> int:
                 text=task.text,
                 difficulty=task.difficulty,
                 target_rows="\n".join(task.target_rows_topdown),
+                block_agent1_lines=block_agent1_lines,
+                block_agent2_lines=block_agent2_lines,
                 block_even=block_even,
                 block_odd=block_odd,
                 block_agent2=block_agent2,
@@ -1285,8 +1318,8 @@ def main() -> int:
         v = _pick_primary_metric(metrics, "score_mean")
         return float(v) if isinstance(v, (int, float)) else float("-inf")
 
-    allowed_blocks_agent1 = [block_even, block_odd]
-    allowed_blocks_agent2 = [block_agent2]
+    allowed_blocks_agent1 = list(block_agent1_blocks)
+    allowed_blocks_agent2 = list(block_agent2_blocks)
     write_record, close_writer = _open_output_writer(output_path)
     write_simple_record, close_simple_writer = _open_jsonl_writer(output_simple_path)
     try:
@@ -1318,6 +1351,8 @@ def main() -> int:
                     text=task.text,
                     difficulty=task.difficulty,
                     target_rows="\n".join(task.target_rows_topdown),
+                    block_agent1_lines=block_agent1_lines,
+                    block_agent2_lines=block_agent2_lines,
                     block_even=block_even,
                     block_odd=block_odd,
                     block_agent2=block_agent2,
@@ -1520,6 +1555,8 @@ def main() -> int:
                     text=task.text,
                     difficulty=task.difficulty,
                     target_rows="\n".join(task.target_rows_topdown),
+                    block_agent1_lines=block_agent1_lines,
+                    block_agent2_lines=block_agent2_lines,
                     block_even=block_even,
                     block_odd=block_odd,
                     block_agent2=block_agent2,
@@ -1541,6 +1578,8 @@ def main() -> int:
                     text=task.text,
                     difficulty=task.difficulty,
                     target_rows="\n".join(task.target_rows_topdown),
+                    block_agent1_lines=block_agent1_lines,
+                    block_agent2_lines=block_agent2_lines,
                     block_even=block_even,
                     block_odd=block_odd,
                     block_agent2=block_agent2,
