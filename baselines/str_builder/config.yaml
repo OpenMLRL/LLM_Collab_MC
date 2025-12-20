@@ -4,14 +4,14 @@ seed: 1234
 agents:
   # 1 = single agent (current behavior)
   # 2 = two agents with separate block constraints
-  num_agents: 2
+  num_agents: 1
 
 dataset:
   # Path is resolved relative to this config file.
-  csv_path: ../../dataset/str_builder/data.csv
+  csv_path: ../../dataset/str_builder/data3.csv
 
 task:
-  # 5x7 block font with 1-column spacing between letters.
+  # 5x5 block font with 1-column spacing between letters.
   spacing: 1
   local_z: 0
   # Two block types the agent may use.
@@ -72,7 +72,7 @@ prompt:
     You are a Minecraft building agent.
     Output must be Minecraft commands only (no markdown, no code fences, no extra text).
   user_template: |
-    Build the following uppercase string as 5x7 block letters on a 2D plane (z is constant).
+    Build the following uppercase string as 5x5 block letters on a 2D plane (z is constant).
 
     String: {text}
     Difficulty: {difficulty}
@@ -103,7 +103,7 @@ prompt:
   user_template_agent1: |
     You are Agent 1 in a 2-person Minecraft building team. You will place SOME of the blocks for the final build.
 
-    Task: Build the uppercase string as 5x7 block letters on a 2D plane (z is constant).
+    Task: Build the uppercase string as 5x5 block letters on a 2D plane (z is constant).
     String: {text}
     Difficulty: {difficulty}
 
@@ -132,7 +132,7 @@ prompt:
   user_template_agent2: |
     You are Agent 2 in a 2-person Minecraft building team. You will place SOME of the blocks for the final build.
 
-    Task: Build the uppercase string as 5x7 block letters on a 2D plane (z is constant).
+    Task: Build the uppercase string as 5x5 block letters on a 2D plane (z is constant).
     String: {text}
     Difficulty: {difficulty}
 
