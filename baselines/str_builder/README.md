@@ -2,7 +2,7 @@
 
 `baselines/str_builder/main.py` reads tasks from `../../dataset/str_builder/data.csv`, prompts an LLM once per task to output **Minecraft command lines** (one command per line), then scores the final build result and writes an eval JSON/JSONL file.
 
-The task: given an uppercase string (e.g. `ICML`), build its 5x5 block-letter mask on a constrained 2D plane. Only the letters should be built (no background).
+The task: given an uppercase string (e.g. `ICML`), build its 5x5 block-letter mask on a constrained 2D plane. Only the letters should be built (no background). Adjacent blocks (sharing a side) must not be the same color.
 
 ## Prereqs
 
@@ -35,14 +35,14 @@ This baseline writes **two** JSONL files per run:
 - Main output: `output.path` from `baselines/str_builder/config.yaml`
 - Simplified output: `output.simple_path` (optional); defaults to `{output.path.stem}.simple.jsonl`
 
-The simplified JSONL keeps only: `task_id/string/difficulty`, `model_id`, and the 2 scores (`score_shape_overlap`, `score_components`).
+The simplified JSONL keeps only: `task_id/string/difficulty`, `model_id`, and the 3 scores (`score_shape_overlap`, `score_components`, `score_s3`).
 
 ## Multi-agent (num_agents=2)
 
 Set `agents.num_agents: 2` in `baselines/str_builder/config.yaml` to run two agents per task:
 
-- Agent1 can only use `task.block_even/task.block_odd` (default: white/black).
-- Agent2 can only use `task.block_agent2` (default: red).
+- Agent1 can only use `task.block_agent1` (list of allowed blocks).
+- Agent2 can only use `task.block_agent2` (list of allowed blocks).
 - Their validated commands are merged and executed in the same world, then scored with the same metrics.
 
 ## Metrics (offline + optional MC scan)
@@ -51,6 +51,7 @@ Each record writes:
 
 - `metrics.score_shape_overlap`: `IoU`
 - `metrics.score_components`: `min(num_8cc / len(string), 1)`
-- `metrics.score_mean`: mean of the two scores above
+- `metrics.score_s3`: adjacency score for same-color neighbors (`1 - num/difficulty` if `num <= difficulty`, else `-1`)
+- `metrics.score_mean`: mean of the three scores above
 
 If Minecraft execution is enabled and scan succeeds, the same metrics are also written with `mc_` prefixes.

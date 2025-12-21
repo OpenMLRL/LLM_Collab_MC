@@ -607,6 +607,36 @@ def _is_air(block_name: str | None) -> bool:
     return b in {"air", "cave_air", "void_air"}
 
 
+_COLOR_PREFIXES = (
+    "light_blue",
+    "light_gray",
+    "orange",
+    "magenta",
+    "yellow",
+    "lime",
+    "pink",
+    "cyan",
+    "purple",
+    "blue",
+    "brown",
+    "green",
+    "red",
+    "black",
+    "white",
+    "gray",
+)
+
+
+def _block_to_color_key(block_id: str) -> str:
+    s = _normalize_block_id(str(block_id or "")).lower()
+    if not s:
+        return ""
+    for color in _COLOR_PREFIXES:
+        if s == color or s.startswith(color + "_"):
+            return color
+    return s
+
+
 def _chamfer_distance(points_a: list[tuple[int, int]], points_b: list[tuple[int, int]]) -> float:
     if not points_a or not points_b:
         return float("inf")
@@ -706,7 +736,25 @@ def _score_str_builder(
     components_ratio = (components / expected) if expected else 0.0
     score_components = min(components_ratio, 1.0) if expected else 0.0
 
-    score_mean = (score_shape_overlap + score_components) / 2.0
+    color_map = {pos: _block_to_color_key(block_id) for pos, block_id in obs_block.items()}
+    adjacent_same_color_pairs = 0
+    for (x, y), color in color_map.items():
+        if not color:
+            continue
+        if color_map.get((x + 1, y)) == color:
+            adjacent_same_color_pairs += 1
+        if color_map.get((x, y + 1)) == color:
+            adjacent_same_color_pairs += 1
+
+    difficulty = int(task.difficulty or 0)
+    if difficulty <= 0:
+        score_s3 = 1.0 if adjacent_same_color_pairs == 0 else -1.0
+    elif adjacent_same_color_pairs <= difficulty:
+        score_s3 = 1.0 - (adjacent_same_color_pairs / float(difficulty))
+    else:
+        score_s3 = -1.0
+
+    score_mean = (score_shape_overlap + score_components + score_s3) / 3.0
 
     return {
         "target_blocks": len(t_set),
@@ -719,6 +767,8 @@ def _score_str_builder(
         "expected_components": expected,
         "components_ratio": components_ratio,
         "score_components": score_components,
+        "adjacent_same_color_pairs": adjacent_same_color_pairs,
+        "score_s3": score_s3,
         "score_mean": score_mean,
     }
 
@@ -1536,6 +1586,7 @@ def main() -> int:
                         "model_id": loaded.model_id,
                         "score_shape_overlap": _pick_primary_metric(best_metrics, "score_shape_overlap"),
                         "score_components": _pick_primary_metric(best_metrics, "score_components"),
+                        "score_s3": _pick_primary_metric(best_metrics, "score_s3"),
                     }
                 )
                 _eprint(f"[{idx}/{len(tasks)}] {task.task_id} samples={len(outputs)} {dt:.2f}s")
@@ -1841,6 +1892,7 @@ def main() -> int:
                         "model_id": loaded.model_id,
                         "score_shape_overlap": _pick_primary_metric(best_metrics, "score_shape_overlap"),
                         "score_components": _pick_primary_metric(best_metrics, "score_components"),
+                        "score_s3": _pick_primary_metric(best_metrics, "score_s3"),
                     }
                 )
                 _eprint(f"[{idx}/{len(tasks)}] {task.task_id} samples={n} {dt:.2f}s")
