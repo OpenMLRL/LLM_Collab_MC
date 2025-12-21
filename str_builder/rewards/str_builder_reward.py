@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable, Dict, List, Mapping
 
-from LLM_Collab_MC.utils.str_builder import (
+from LLM_Collab_MC.str_builder.utils.str_builder import (
     TaskSpec,
     extract_command_lines,
     score_str_builder,

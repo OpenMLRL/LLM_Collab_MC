@@ -6,7 +6,7 @@ import os
 
 from comlrl.trainers.magrpo import MAGRPOConfig  # type: ignore
 
-from LLM_Collab_MC.utils.config import expand_jobid_placeholder
+from LLM_Collab_MC.str_builder.utils.config import expand_jobid_placeholder
 
 
 def _as_int(x: Any, default: int) -> int:

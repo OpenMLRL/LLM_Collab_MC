@@ -6,11 +6,11 @@ seed: 42
 
 collab:
   # GRPO = num_agents=1. (CoMLRL's MAGRPOTrainer supports num_agents>=1.)
-  num_agents: 2
+  num_agents: 1
 
 data:
   # Path is resolved relative to this config file.
-  csv_path: ../dataset/str_builder/one.csv
+  csv_path: ../../dataset/str_builder/one.csv
   split_ratio: 0.8
   spacing: 1
   local_z: 0
@@ -154,7 +154,7 @@ trainer:
   temperature: 0.2
   top_p: 0.95
   # Set >1 to enable multi-turn training with external feedback prompts.
-  num_turns: 2
+  num_turns: 1
   # comlrl MAGRPOConfig.joint_mode: aligned (index-aligned) | cross (Cartesian product)
   joint_mode: aligned
   # normalize_advantage: true

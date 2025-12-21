@@ -14,7 +14,7 @@ except Exception as e:  # pragma: no cover
 
 
 # Make repo importable as a package.
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(REPO_ROOT))
 
 from datasets import Dataset  # type: ignore
@@ -24,15 +24,15 @@ import torch  # type: ignore
 from comlrl.trainers.magrpo import MAGRPOTrainer  # type: ignore
 from comlrl.utils.reward_processor import RewardProcessors  # type: ignore
 
-from LLM_Collab_MC.external import (
+from LLM_Collab_MC.str_builder.external import (
     get_external_transition as external_get_transition,
     set_context_resolver as external_set_context_resolver,
 )
-from LLM_Collab_MC.rewards.str_builder_reward import get_reward_function
-from LLM_Collab_MC.utils.config import apply_overrides, expand_jobid_placeholder, load_yaml, resolve_path
-from LLM_Collab_MC.utils.patches import apply_default_patches
-from LLM_Collab_MC.utils.str_builder import load_tasks_from_csv
-from LLM_Collab_MC.utils.trainer_args import get_trainer_args
+from LLM_Collab_MC.str_builder.rewards.str_builder_reward import get_reward_function
+from LLM_Collab_MC.str_builder.utils.config import apply_overrides, expand_jobid_placeholder, load_yaml, resolve_path
+from LLM_Collab_MC.str_builder.utils.patches import apply_default_patches
+from LLM_Collab_MC.str_builder.utils.str_builder import load_tasks_from_csv
+from LLM_Collab_MC.str_builder.utils.trainer_args import get_trainer_args
 
 
 def _split_list(items: List[Dict[str, Any]], split_ratio: float, seed: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -149,7 +149,7 @@ def main() -> int:
     parser.add_argument(
         "--config",
         type=str,
-        default=os.path.join(REPO_ROOT, "configs", "str_builder_config.yaml"),
+        default=os.path.join(REPO_ROOT, "str_builder", "configs", "str_builder_config.yaml"),
         help="Path to YAML config",
     )
     parser.add_argument("--override", type=str, default=None, help="key.path=value overrides, comma-separated")
@@ -229,12 +229,13 @@ def main() -> int:
     agents = []
     for _ in range(num_agents):
         agent = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
-        try:
-            if hasattr(agent, "config"):
-                agent.config.use_cache = False
-        except Exception:
-            pass
-        if bool(model_cfg.get("gradient_checkpointing", True)):
+        enable_gc = bool(model_cfg.get("gradient_checkpointing", True))
+        if enable_gc:
+            try:
+                if hasattr(agent, "config"):
+                    agent.config.use_cache = False
+            except Exception:
+                pass
             try:
                 agent.gradient_checkpointing_enable()
             except Exception:

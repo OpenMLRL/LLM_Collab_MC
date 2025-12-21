@@ -4,7 +4,7 @@ set -euo pipefail
 # Example SLURM wrapper for str_builder GRPO training (CoMLRL MAGRPOTrainer with num_agents=1).
 #
 # Usage:
-#   ACCOUNT=... PARTITION=... ./scripts/train_str_builder_grpo_sbatch.sh
+#   ACCOUNT=... PARTITION=... ./str_builder/scripts/train_str_builder_grpo_sbatch.sh
 #
 # You can override defaults via *_OVERRIDE env vars.
 
@@ -25,7 +25,7 @@ TIME="${TIME_OVERRIDE:-24:00:00}"
 if [[ -z "${ACCOUNT}" || -z "${PARTITION}" ]]; then
   echo "ERROR: set ACCOUNT and PARTITION (env vars) for sbatch." >&2
   echo "Example:" >&2
-  echo "  ACCOUNT=YOUR_ACCOUNT PARTITION=YOUR_PARTITION ./scripts/train_str_builder_grpo_sbatch.sh" >&2
+  echo "  ACCOUNT=YOUR_ACCOUNT PARTITION=YOUR_PARTITION ./str_builder/scripts/train_str_builder_grpo_sbatch.sh" >&2
   exit 2
 fi
 

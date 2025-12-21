@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from LLM_Collab_MC.utils.str_builder import (
+from LLM_Collab_MC.str_builder.utils.str_builder import (
     TaskSpec,
     extract_command_lines,
     normalize_block_id,
