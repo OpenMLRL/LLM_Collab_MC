@@ -31,7 +31,7 @@ from LLM_Collab_MC.str_rainbow.external import (
 from LLM_Collab_MC.str_rainbow.rewards.str_rainbow_reward import get_reward_function
 from LLM_Collab_MC.str_rainbow.utils.config import apply_overrides, expand_jobid_placeholder, load_yaml, resolve_path
 from LLM_Collab_MC.str_rainbow.utils.patches import apply_default_patches
-from LLM_Collab_MC.str_rainbow.utils.prompting import apply_prompt_defaults
+from LLM_Collab_MC.str_rainbow.utils.prompting import apply_graph_setting, apply_prompt_defaults
 from LLM_Collab_MC.str_rainbow.utils.str_rainbow import load_tasks_from_csv
 from LLM_Collab_MC.str_rainbow.utils.trainer_args import get_trainer_args
 
@@ -74,10 +74,14 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int) -> List[Any]:
     prompt_cfg = cfg.get("prompt") or {}
     if not isinstance(prompt_cfg, dict):
         prompt_cfg = {}
+    provide_graph = bool(prompt_cfg.get("provide_graph", True))
     system_prompt = str(prompt_cfg.get("system") or "").rstrip()
     user_template = str(prompt_cfg.get("user_template") or "").rstrip()
     user_template_agent1 = str(prompt_cfg.get("user_template_agent1") or user_template).rstrip()
     user_template_agent2 = str(prompt_cfg.get("user_template_agent2") or user_template).rstrip()
+    user_template = apply_graph_setting(user_template, provide_graph=provide_graph)
+    user_template_agent1 = apply_graph_setting(user_template_agent1, provide_graph=provide_graph)
+    user_template_agent2 = apply_graph_setting(user_template_agent2, provide_graph=provide_graph)
 
     task_cfg = cfg.get("task") or {}
     if not isinstance(task_cfg, dict):
@@ -124,7 +128,7 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int) -> List[Any]:
         w_from = item.get("local_bbox_from") or [0, 0, 0]
         w_to = item.get("local_bbox_to") or [0, 0, 0]
         target_rows = item.get("target_rows_topdown") or []
-        target_ascii = "\n".join(str(r) for r in target_rows)
+        target_ascii = "" if not provide_graph else "\n".join(str(r) for r in target_rows)
         user = tmpl.format(
             task_id=str(item.get("task_id") or ""),
             text=str(item.get("string") or ""),
@@ -316,10 +320,14 @@ def main() -> int:
         prompt_cfg = cfg.get("prompt") or {}
         if not isinstance(prompt_cfg, dict):
             prompt_cfg = {}
+        provide_graph = bool(prompt_cfg.get("provide_graph", True))
         system_prompt = str(prompt_cfg.get("system") or "").rstrip()
         user_template = str(prompt_cfg.get("user_template") or "").rstrip()
         user_template_agent1 = str(prompt_cfg.get("user_template_agent1") or user_template).rstrip()
         user_template_agent2 = str(prompt_cfg.get("user_template_agent2") or user_template).rstrip()
+        user_template = apply_graph_setting(user_template, provide_graph=provide_graph)
+        user_template_agent1 = apply_graph_setting(user_template_agent1, provide_graph=provide_graph)
+        user_template_agent2 = apply_graph_setting(user_template_agent2, provide_graph=provide_graph)
 
         task_cfg = cfg.get("task") or {}
         if not isinstance(task_cfg, dict):
@@ -369,7 +377,7 @@ def main() -> int:
                 w_from = item.get("local_bbox_from") or [0, 0, 0]
                 w_to = item.get("local_bbox_to") or [0, 0, 0]
                 target_rows = item.get("target_rows_topdown") or []
-                target_ascii = "\n".join(str(r) for r in target_rows)
+                target_ascii = "" if not provide_graph else "\n".join(str(r) for r in target_rows)
                 fmt_kwargs = {
                     "task_id": str(item.get("task_id") or ""),
                     "text": str(item.get("string") or ""),

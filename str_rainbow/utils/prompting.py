@@ -33,7 +33,6 @@ Constraints:
 - Allowed commands: /setblock only.
 - Use absolute integer coordinates only (no ~).
 - Place blocks ONLY at '#' positions; leave '.' as air.
-- Adjacent blocks (sharing a side) must NOT be the same color.
 - Every coordinate must be within the bbox.
 """
 
@@ -100,11 +99,35 @@ Constraints:
 """
 
 DEFAULT_PROMPT_CONFIG = {
+    "provide_graph": True,
     "system": DEFAULT_SYSTEM_PROMPT,
     "user_template": DEFAULT_USER_TEMPLATE,
     "user_template_agent1": DEFAULT_USER_TEMPLATE_AGENT1,
     "user_template_agent2": DEFAULT_USER_TEMPLATE_AGENT2,
 }
+
+
+def apply_graph_setting(template: str, *, provide_graph: bool) -> str:
+    if provide_graph:
+        return template
+    lines = (template or "").splitlines()
+    out = []
+    drop_substrings = ("#'", "'.'")
+    skip_next = False
+    for line in lines:
+        if skip_next:
+            skip_next = False
+            if "{target_ascii}" in line:
+                continue
+            out.append(line)
+            continue
+        if any(sub in line for sub in drop_substrings):
+            continue
+        if line.strip() == "Target grid (top-down rows):":
+            skip_next = True
+            continue
+        out.append(line)
+    return "\n".join(out).rstrip()
 
 
 def apply_prompt_defaults(cfg: Dict[str, Any]) -> None:
