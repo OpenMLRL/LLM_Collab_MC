@@ -29,7 +29,7 @@ prompt:
     Output ONLY the ASCII grid (no markdown, no code fences, no extra text).
 
   hints:
-    enabled: false
+    enabled: true
 
   # Single-agent prompt.
   user_template: |
@@ -107,7 +107,7 @@ trainer:
   save_steps: 200
   num_generations: 2
   max_new_tokens: 256
-  temperature: 0.2
+  temperature: 0.7
   top_p: 0.95
   # Set >1 to enable multi-turn training with external feedback prompts.
   num_turns: 2
