@@ -6,7 +6,7 @@ import re
 from comlrl.trainers.magrpo import MAGRPOTrainer  # type: ignore
 
 
-def patch_trainer_generation_for_memory() -> None:
+def patch_trainer_generation_for_memory(*, use_memory: bool = True, force_sampling: bool = False) -> None:
     try:
         orig = MAGRPOTrainer._generate_completions  # type: ignore[attr-defined]
     except Exception:
@@ -14,8 +14,23 @@ def patch_trainer_generation_for_memory() -> None:
 
     def wrapped(self, agent, batch_items, agent_idx=0, num_return_sequences=1, max_new_tokens=None, **kwargs):
         try:
-            kwargs.setdefault("output_scores", False)
-            kwargs.setdefault("use_cache", False)
+            if use_memory:
+                kwargs.setdefault("output_scores", False)
+                kwargs.setdefault("use_cache", False)
+            if force_sampling:
+                kwargs["do_sample"] = True
+                if "temperature" not in kwargs:
+                    try:
+                        kwargs["temperature"] = float(getattr(self.args, "temperature", 1.0))
+                    except Exception:
+                        kwargs["temperature"] = 1.0
+                if "top_p" not in kwargs:
+                    try:
+                        kwargs["top_p"] = float(getattr(self.args, "top_p", 1.0))
+                    except Exception:
+                        kwargs["top_p"] = 1.0
+                kwargs.setdefault("top_k", 50)
+                kwargs.setdefault("num_beams", 1)
             import torch as _torch  # local import
 
             eff_max_new = max_new_tokens
@@ -147,8 +162,10 @@ def patch_debug_turn_tracking() -> None:
 
 def apply_default_patches(cfg: Dict[str, Any] | None = None) -> None:
     gates = (cfg or {}).get("patches", {}) if isinstance(cfg, dict) else {}
-    if gates.get("generation_memory", True):
-        patch_trainer_generation_for_memory()
+    use_memory = bool(gates.get("generation_memory", True))
+    force_sampling = bool(gates.get("force_sampling", False))
+    if use_memory or force_sampling:
+        patch_trainer_generation_for_memory(use_memory=use_memory, force_sampling=force_sampling)
     if gates.get("single_agent_returns", True):
         patch_single_agent_returns()
     if gates.get("debug_turn_tracking", True):

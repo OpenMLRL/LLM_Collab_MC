@@ -100,6 +100,7 @@ Constraints:
 
 DEFAULT_PROMPT_CONFIG = {
     "provide_graph": True,
+    "use_chat_template": False,
     "system": DEFAULT_SYSTEM_PROMPT,
     "user_template": DEFAULT_USER_TEMPLATE,
     "user_template_agent1": DEFAULT_USER_TEMPLATE_AGENT1,

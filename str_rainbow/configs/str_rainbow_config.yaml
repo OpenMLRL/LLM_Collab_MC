@@ -27,6 +27,8 @@ task:
 prompt:
   # When false, omit the target ASCII grid from prompts.
   provide_graph: true
+  # Use tokenizer.apply_chat_template when available.
+  use_chat_template: true
 
 external:
   # Only used when trainer.num_turns > 1.
@@ -88,6 +90,7 @@ reward_processor:
 patches:
   generation_memory: true
   single_agent_returns: true
+  force_sampling: true
 
 wandb:
   enabled: true

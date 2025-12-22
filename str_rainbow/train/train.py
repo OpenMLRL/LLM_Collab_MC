@@ -70,11 +70,35 @@ def _map_dtype(dtype_cfg: Any) -> Any:
     return None
 
 
-def _build_formatters(cfg: Dict[str, Any], *, num_agents: int) -> List[Any]:
+def _render_prompt(
+    *,
+    tokenizer: Any | None,
+    system_prompt: str,
+    user_prompt: str,
+    use_chat_template: bool,
+) -> str:
+    system_prompt = (system_prompt or "").rstrip()
+    user_prompt = (user_prompt or "").rstrip()
+    if use_chat_template and tokenizer is not None and hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
+        messages: List[Dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+        try:
+            return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        except TypeError:
+            return tokenizer.apply_chat_template(messages, tokenize=False)
+    if system_prompt:
+        return system_prompt + "\n\n" + user_prompt
+    return user_prompt
+
+
+def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | None = None) -> List[Any]:
     prompt_cfg = cfg.get("prompt") or {}
     if not isinstance(prompt_cfg, dict):
         prompt_cfg = {}
     provide_graph = bool(prompt_cfg.get("provide_graph", True))
+    use_chat_template = bool(prompt_cfg.get("use_chat_template", False))
     system_prompt = str(prompt_cfg.get("system") or "").rstrip()
     user_template = str(prompt_cfg.get("user_template") or "").rstrip()
     user_template_agent1 = str(prompt_cfg.get("user_template_agent1") or user_template).rstrip()
@@ -139,9 +163,12 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int) -> List[Any]:
             block_agent1_lines=block_agent1_lines,
             block_agent2_lines=block_agent2_lines,
         ).rstrip()
-        if system_prompt:
-            return system_prompt + "\n\n" + user
-        return user
+        return _render_prompt(
+            tokenizer=tokenizer,
+            system_prompt=system_prompt,
+            user_prompt=user,
+            use_chat_template=use_chat_template,
+        )
 
     if num_agents == 1:
         return [lambda item: _render(item, user_template)]
@@ -252,7 +279,7 @@ def main() -> int:
         agents.append(agent)
 
     magrpo_args = get_trainer_args(cfg)
-    formatters = _build_formatters(cfg, num_agents=num_agents)
+    formatters = _build_formatters(cfg, num_agents=num_agents, tokenizer=tokenizer)
     reward_func = get_reward_function(cfg=cfg, num_agents=num_agents)
 
     reward_processor = None
