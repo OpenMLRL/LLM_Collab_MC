@@ -17,9 +17,9 @@ data:
 
 task:
   # Allowed blocks for agent1 (and single-agent).
-  block_agent1: [black_concrete, white_concrete]
+  block_agent1: [black_concrete]
   # Allowed blocks for agent2 (only used when collab.num_agents=2).
-  block_agent2: [red_concrete]
+  block_agent2: [white_concrete]
   # Cap accepted commands per agent (extra commands are rejected for reward).
   max_commands: 300
 
@@ -169,6 +169,8 @@ debug:
   every_n_calls: 20
   # Character for empty cells in the debug render.
   empty_char: "."
+  # Print raw agent completions when true.
+  raw_output: true
 
 reward_processor:
   enabled: false

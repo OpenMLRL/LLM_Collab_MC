@@ -76,6 +76,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         debug_max_prints = 10
     debug_every_n_calls = _as_int(debug_cfg.get("every_n_calls"), 0)
     debug_empty_char = str(debug_cfg.get("empty_char") or ".")[:1] or "."
+    debug_raw_output = bool(debug_cfg.get("raw_output", False))
 
     debug_state = {"calls": 0, "printed": 0}
 
@@ -114,6 +115,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         metrics: Mapping[str, Any],
         obs_map: Mapping[tuple[int, int, int], str],
         turn_idx: int | None,
+        raw_outputs: List[str] | None,
     ) -> None:
         if not debug_enabled:
             return
@@ -133,6 +135,10 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         )
         print(prefix, flush=True)
         print(_render_overlay(task, obs_map), flush=True)
+        if debug_raw_output and raw_outputs is not None:
+            for idx, raw in enumerate(raw_outputs):
+                print(f"[str_rainbow raw] agent{idx}:", flush=True)
+                print((raw or "").rstrip(), flush=True)
 
     if num_agents == 1:
         max_commands_agent1 = max_commands_total
@@ -166,7 +172,14 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             reward = float(metrics.get("score_mean", 0.0))
             if debug_enabled:
                 obs_map = {tuple(b["pos"]): normalize_block_id(b.get("name") or "air") for b in blocks}
-                _maybe_debug_print(task=task, reward=reward, metrics=metrics, obs_map=obs_map, turn_idx=turn_idx)
+                _maybe_debug_print(
+                    task=task,
+                    reward=reward,
+                    metrics=metrics,
+                    obs_map=obs_map,
+                    turn_idx=turn_idx,
+                    raw_outputs=[completion],
+                )
             return [reward]
 
         return reward_fn
@@ -223,7 +236,14 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         reward = float(metrics.get("score_mean", 0.0))
         if debug_enabled:
             obs_map = {tuple(b["pos"]): normalize_block_id(b.get("name") or "air") for b in blocks}
-            _maybe_debug_print(task=task, reward=reward, metrics=metrics, obs_map=obs_map, turn_idx=turn_idx)
+            _maybe_debug_print(
+                task=task,
+                reward=reward,
+                metrics=metrics,
+                obs_map=obs_map,
+                turn_idx=turn_idx,
+                raw_outputs=[c1, c2],
+            )
         return [reward]
 
     return reward_fn
