@@ -1,0 +1,3 @@
+from .str_rainbow_reward import get_reward_function
+
+__all__ = ["get_reward_function"]
