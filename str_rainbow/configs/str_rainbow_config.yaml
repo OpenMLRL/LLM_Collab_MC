@@ -32,7 +32,7 @@ prompt:
 
 external:
   # Only used when trainer.num_turns > 1.
-  mode: perfect_feedback
+  mode: position_feedback
   # Include the original (turn-1) prompt after the ASCII feedback.
   original_prompt: true
   # Optionally include previous commands verbatim (usually keep false).
