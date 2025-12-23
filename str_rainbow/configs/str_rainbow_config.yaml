@@ -32,7 +32,7 @@ prompt:
 
 external:
   # Only used when trainer.num_turns > 1.
-  mode: draw_feedback
+  mode: perfect_feedback
   # Include the original (turn-1) prompt after the ASCII feedback.
   original_prompt: true
   # Optionally include previous commands verbatim (usually keep false).
@@ -53,9 +53,9 @@ model:
 trainer:
   # Set by scripts (supports [jobid] placeholder).
   output_dir: TODO
-  num_train_epochs: 20
+  num_train_epochs: 200
   per_device_train_batch_size: 1
-  learning_rate: 1e-5
+  learning_rate: 3e-6
   logging_steps: 20
   save_steps: 200
   num_generations: 2

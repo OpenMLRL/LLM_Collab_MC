@@ -6,12 +6,12 @@ CoMLRL's MAGRPOTrainer supports multi-turn rollouts via an `external_transition`
 callback. This module provides a small adapter that:
 
 - Resolves a dataset-level prompt key (e.g., "str_rainbow:...") into a context dict.
-- Builds next-turn prompts for each agent using `mode=draw_feedback`.
+- Builds next-turn prompts for each agent using `mode=perfect_feedback`.
 """
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from . import draw_feedback
+from . import perfect_feedback
 
 
 # Verbose toggle for external previews
@@ -43,7 +43,7 @@ def get_external_transition(
     prompt: str,
     agent_completions: Union[List[str], Tuple[str, ...]],
     num_agents: int = 2,
-    mode: str = "draw_feedback",
+    mode: str = "perfect_feedback",
     *,
     prompt_history_per_agent: Optional[List[List[str]]] = None,
     response_history_per_agent: Optional[List[List[str]]] = None,
@@ -61,8 +61,8 @@ def get_external_transition(
     original_prompt_flag = bool(kwargs.get("original_prompt", True))
     previous_response_flag = bool(kwargs.get("previous_response", False))
 
-    if mode_key in ("draw_feedback", "draw-feedback", "feedback"):
-        prompts = draw_feedback.format_followup_prompts(
+    if mode_key in ("perfect_feedback", "perfect-feedback", "feedback"):
+        prompts = perfect_feedback.format_followup_prompts(
             ctx=ctx,
             agent_completions=list(agent_completions),
             num_agents=n,
@@ -73,7 +73,7 @@ def get_external_transition(
         )
         if VERBOSE:
             print("\n" + "=" * 60)
-            print("EXTERNAL MODE PREVIEW: draw_feedback")
+            print("EXTERNAL MODE PREVIEW: perfect_feedback")
             for i, p in enumerate(prompts):
                 print("-" * 60)
                 print(f"AGENT {i} PROMPT:\n{p}")
