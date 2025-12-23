@@ -34,7 +34,7 @@ def _task_from_batch_item(item: Mapping[str, Any]) -> TaskSpec:
 
 
 def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[..., List[float]]:
-    """Return a reward function for str_rainbow based on target color accuracy."""
+    """Return a reward function for str_rainbow using coverage and penalty ratios."""
     task_cfg = cfg.get("task") or {}
     if not isinstance(task_cfg, dict):
         task_cfg = {}
@@ -126,12 +126,15 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             return
         debug_state["printed"] += 1
         turn_str = f" turn={int(turn_idx)}" if turn_idx is not None else ""
+        coverage = float(metrics.get("coverage_ratio", metrics.get("accuracy", 0.0)))
+        extra_ratio = float(metrics.get("extra_ratio", 0.0))
+        adj_ratio = float(metrics.get("adjacent_same_color_ratio", 0.0))
         prefix = (
             f"[str_rainbow debug] {task.task_id} text={task.text!r}{turn_str} "
             f"reward={reward:.4f} "
-            f"acc={float(metrics.get('accuracy', 0.0)):.3f} "
-            f"extra={int(metrics.get('extra_blocks', 0))} "
-            f"adj={int(metrics.get('adjacent_same_color_pairs', 0))}"
+            f"cov={coverage:.3f} "
+            f"extra_r={extra_ratio:.3f} "
+            f"adj_r={adj_ratio:.3f}"
         )
         print(prefix, flush=True)
         print(_render_overlay(task, obs_map), flush=True)

@@ -407,17 +407,14 @@ def score_str_rainbow(
     target_positions = set(expected_map.keys())
     target_total = len(target_positions)
 
-    correct = 0
+    covered = 0
     missing = 0
-    wrong_color = 0
-    for pos, expected in expected_map.items():
+    for pos in expected_map:
         observed = normalize_block_id(obs_map.get(pos, "air"))
-        if observed == expected:
-            correct += 1
-        elif _is_air(observed):
+        if _is_air(observed):
             missing += 1
         else:
-            wrong_color += 1
+            covered += 1
 
     extra = 0
     for pos, observed in obs_map.items():
@@ -431,7 +428,7 @@ def score_str_rainbow(
     total_cells = max(0, height * width)
     background_total = max(0, total_cells - target_total)
 
-    accuracy = (correct / target_total) if target_total else 0.0
+    coverage_ratio = (covered / target_total) if target_total else 0.0
     extra_ratio = (extra / background_total) if background_total > 0 else 0.0
 
     color_map: Dict[Tuple[int, int, int], str] = {}
@@ -441,31 +438,42 @@ def score_str_rainbow(
         color_map[pos] = block_to_color_key(block_id)
 
     adjacent_same_color_pairs = 0
+    adjacent_color_pairs = 0
     for (x, y, z), color in color_map.items():
-        if not color:
-            continue
-        if color_map.get((x + 1, y, z)) == color:
-            adjacent_same_color_pairs += 1
-        if color_map.get((x, y + 1, z)) == color:
-            adjacent_same_color_pairs += 1
+        neighbor = color_map.get((x + 1, y, z))
+        if neighbor is not None:
+            adjacent_color_pairs += 1
+            if neighbor == color:
+                adjacent_same_color_pairs += 1
+        neighbor = color_map.get((x, y + 1, z))
+        if neighbor is not None:
+            adjacent_color_pairs += 1
+            if neighbor == color:
+                adjacent_same_color_pairs += 1
 
-    score_acc = (2.0 * accuracy) - 1.0 if target_total else 1.0
-    score_bg = 1.0 - (2.0 * extra_ratio) if background_total > 0 else 1.0
-    score_adj = 1.0 if adjacent_same_color_pairs == 0 else -1.0
+    adjacent_same_color_ratio = (
+        adjacent_same_color_pairs / adjacent_color_pairs if adjacent_color_pairs > 0 else 0.0
+    )
 
-    score_mean = (score_acc + score_bg + score_adj) / 3.0
+    score_acc = 2.0 * coverage_ratio
+    penalty_extra = 1.5 * extra_ratio
+    penalty_adj = 2.0 * adjacent_same_color_ratio
+    score_total = score_acc - penalty_extra - penalty_adj
 
     return {
         "target_total": target_total,
-        "correct": correct,
+        "covered": covered,
         "missing": missing,
-        "wrong_color": wrong_color,
-        "accuracy": accuracy,
+        "accuracy": coverage_ratio,
+        "coverage_ratio": coverage_ratio,
         "extra_blocks": extra,
         "extra_ratio": extra_ratio,
         "adjacent_same_color_pairs": adjacent_same_color_pairs,
+        "adjacent_color_pairs": adjacent_color_pairs,
+        "adjacent_same_color_ratio": adjacent_same_color_ratio,
         "score_acc": score_acc,
-        "score_bg": score_bg,
-        "score_adj": score_adj,
-        "score_mean": score_mean,
+        "penalty_extra": penalty_extra,
+        "penalty_adj": penalty_adj,
+        "score_total": score_total,
+        "score_mean": score_total,
     }
