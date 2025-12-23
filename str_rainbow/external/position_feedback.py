@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from LLM_Collab_MC.str_rainbow.external.hints import append_turn1_hint
 from LLM_Collab_MC.str_rainbow.utils.str_rainbow import TaskSpec, get_target_positions
 
 
@@ -99,9 +100,11 @@ def format_followup_prompts(
                 "Format: /setblock <x> <y> <z> <block>",
             ]
         )
-        if original_prompt_flag and base_user:
-            parts.append("")
-            parts.append(base_user)
+        if original_prompt_flag:
+            hinted_user = append_turn1_hint(base_user, ctx)
+            if hinted_user:
+                parts.append("")
+                parts.append(hinted_user)
         if previous_response_flag:
             prev = agent_completions[agent_idx] if agent_idx < len(agent_completions) else ""
             if prev.strip():

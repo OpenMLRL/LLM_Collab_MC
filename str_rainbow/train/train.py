@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import sys
@@ -114,16 +113,6 @@ def _get_provide_graph(cfg: Dict[str, Any]) -> bool:
     return True
 
 
-def _stable_hint_seed(base_seed: int, *, task_id: str, text: str) -> int:
-    h = hashlib.sha256()
-    h.update(str(int(base_seed)).encode())
-    h.update(b"|")
-    h.update(str(task_id).encode())
-    h.update(b"|")
-    h.update(str(text).encode())
-    return int.from_bytes(h.digest()[:8], "big", signed=False)
-
-
 def _infer_spacing(rows: List[str], text_len: int, spacing_default: Any) -> int:
     if text_len <= 1:
         return 0
@@ -138,7 +127,7 @@ def _infer_spacing(rows: List[str], text_len: int, spacing_default: Any) -> int:
         return 0
 
 
-def _select_one_letter_positions(item: Dict[str, Any], *, spacing_default: Any, seed: int) -> List[tuple[int, int, int]]:
+def _select_one_letter_positions(item: Dict[str, Any], *, spacing_default: Any) -> List[tuple[int, int, int]]:
     text = str(item.get("string") or "")
     if not text:
         return []
@@ -148,11 +137,9 @@ def _select_one_letter_positions(item: Dict[str, Any], *, spacing_default: Any, 
     local_bbox_from = item.get("local_bbox_from") or [0, 0, 0]
     height = len(rows)
     spacing = _infer_spacing(rows, len(text), spacing_default)
-    hint_seed = _stable_hint_seed(seed, task_id=str(item.get("task_id") or ""), text=text)
-    import random
+    import secrets
 
-    rng = random.Random(int(hint_seed))
-    letter_idx = rng.randrange(len(text))
+    letter_idx = secrets.randbelow(len(text))
     start = letter_idx * (5 + spacing)
     end = start + 4
     positions: List[tuple[int, int, int]] = []
@@ -175,7 +162,7 @@ def _format_positions(points: List[tuple[int, int, int]]) -> str:
     return "\n".join(f"- ({x}, {y}, {z})" for x, y, z in points)
 
 
-def _maybe_apply_turn1_hint(user: str, *, item: Dict[str, Any], cfg: Dict[str, Any], seed: int) -> str:
+def _maybe_apply_turn1_hint(user: str, *, item: Dict[str, Any], cfg: Dict[str, Any]) -> str:
     turn1_hint = _get_turn1_hint_cfg(cfg)
     if not bool(turn1_hint.get("one_letter", False)):
         return user
@@ -187,13 +174,14 @@ def _maybe_apply_turn1_hint(user: str, *, item: Dict[str, Any], cfg: Dict[str, A
         return user
     data_cfg = cfg.get("data") or {}
     spacing_default = data_cfg.get("spacing", 1) if isinstance(data_cfg, dict) else 1
-    positions = _select_one_letter_positions(item, spacing_default=spacing_default, seed=seed)
+    positions = _select_one_letter_positions(item, spacing_default=spacing_default)
     if not positions:
         return user
     hint_block = "\n".join(
         [
             "Turn 1 hint (one-letter positions):",
             _format_positions(positions),
+            "You must infer the remaining characters' shapes and positions yourself.",
         ]
     ).strip()
     if not hint_block:
@@ -206,7 +194,6 @@ def _build_formatters(
     *,
     num_agents: int,
     tokenizer: Any | None = None,
-    seed: int = 0,
 ) -> List[Any]:
     prompt_cfg = cfg.get("prompt") or {}
     if not isinstance(prompt_cfg, dict):
@@ -277,7 +264,7 @@ def _build_formatters(
             block_agent1_lines=block_agent1_lines,
             block_agent2_lines=block_agent2_lines,
         ).rstrip()
-        user = _maybe_apply_turn1_hint(user, item=item, cfg=cfg, seed=seed)
+        user = _maybe_apply_turn1_hint(user, item=item, cfg=cfg)
         return _render_prompt(
             tokenizer=tokenizer,
             system_prompt=system_prompt,
@@ -394,7 +381,7 @@ def main() -> int:
         agents.append(agent)
 
     magrpo_args = get_trainer_args(cfg)
-    formatters = _build_formatters(cfg, num_agents=num_agents, tokenizer=tokenizer, seed=seed)
+    formatters = _build_formatters(cfg, num_agents=num_agents, tokenizer=tokenizer)
     reward_func = get_reward_function(cfg=cfg, num_agents=num_agents)
 
     reward_processor = None
@@ -530,29 +517,11 @@ def main() -> int:
                     "block_agent1_lines": block_agent1_lines,
                     "block_agent2_lines": block_agent2_lines,
                 }
-                user_prompt_single = _maybe_apply_turn1_hint(
-                    user_template.format(**fmt_kwargs).rstrip(),
-                    item=item,
-                    cfg=cfg,
-                    seed=seed,
-                )
-                user_prompt_agent1 = _maybe_apply_turn1_hint(
-                    user_template_agent1.format(**fmt_kwargs).rstrip(),
-                    item=item,
-                    cfg=cfg,
-                    seed=seed,
-                )
-                user_prompt_agent2 = _maybe_apply_turn1_hint(
-                    user_template_agent2.format(**fmt_kwargs).rstrip(),
-                    item=item,
-                    cfg=cfg,
-                    seed=seed,
-                )
                 payload = {
                     "system_prompt": system_prompt,
-                    "user_prompt_single": user_prompt_single,
-                    "user_prompt_agent1": user_prompt_agent1,
-                    "user_prompt_agent2": user_prompt_agent2,
+                    "user_prompt_single": user_template.format(**fmt_kwargs).rstrip(),
+                    "user_prompt_agent1": user_template_agent1.format(**fmt_kwargs).rstrip(),
+                    "user_prompt_agent2": user_template_agent2.format(**fmt_kwargs).rstrip(),
                     "task_id": str(item.get("task_id") or ""),
                     "text": str(item.get("string") or ""),
                     "difficulty": int(item.get("difficulty") or 0),
@@ -562,6 +531,8 @@ def main() -> int:
                     "allowed_blocks_agent1": list(agent1_blocks),
                     "allowed_blocks_agent2": list(agent2_blocks),
                     "max_commands_total": max_commands_total,
+                    "turn1_hint": _get_turn1_hint_cfg(cfg),
+                    "hint_spacing": spacing,
                 }
 
                 ds_key = _normalize_key(str(item.get("prompt") or ""))
