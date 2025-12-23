@@ -25,10 +25,13 @@ task:
 
 # Prompt templates are defined in utils/prompting.py; override here if needed.
 prompt:
-  # When false, omit the target ASCII grid from prompts.
-  provide_graph: true
   # Use tokenizer.apply_chat_template when available.
   use_chat_template: true
+  turn1_hint:
+    # When false, omit the target ASCII grid from prompts.
+    provide_graph: false
+    # When true and difficulty > 1, show positions for one random letter.
+    one_letter: true
 
 external:
   # Only used when trainer.num_turns > 1.
@@ -53,7 +56,7 @@ model:
 trainer:
   # Set by scripts (supports [jobid] placeholder).
   output_dir: TODO
-  num_train_epochs: 200
+  num_train_epochs: 150
   per_device_train_batch_size: 1
   learning_rate: 3e-6
   logging_steps: 20

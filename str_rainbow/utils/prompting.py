@@ -101,8 +101,13 @@ Constraints:
 Format: /setblock <x> <y> <z> <block>
 """
 
-DEFAULT_PROMPT_CONFIG = {
+DEFAULT_TURN1_HINT = {
     "provide_graph": True,
+    "one_letter": False,
+}
+
+DEFAULT_PROMPT_CONFIG = {
+    "turn1_hint": DEFAULT_TURN1_HINT,
     "use_chat_template": False,
     "system": DEFAULT_SYSTEM_PROMPT,
     "user_template": DEFAULT_USER_TEMPLATE,
@@ -140,5 +145,18 @@ def apply_prompt_defaults(cfg: Dict[str, Any]) -> None:
         prompt_cfg = {}
         cfg["prompt"] = prompt_cfg
     for key, value in DEFAULT_PROMPT_CONFIG.items():
+        if key == "turn1_hint":
+            turn1 = prompt_cfg.get("turn1_hint")
+            if not isinstance(turn1, dict):
+                turn1 = {}
+                prompt_cfg["turn1_hint"] = turn1
+            for tkey, tval in DEFAULT_TURN1_HINT.items():
+                if tkey in turn1:
+                    continue
+                if tkey == "provide_graph" and "provide_graph" in prompt_cfg:
+                    turn1[tkey] = bool(prompt_cfg.get("provide_graph"))
+                else:
+                    turn1[tkey] = tval
+            continue
         if key not in prompt_cfg:
             prompt_cfg[key] = value
