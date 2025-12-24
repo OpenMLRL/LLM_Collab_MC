@@ -8,6 +8,8 @@ It also starts a browser viewer (prismarine-viewer) so you can watch the result.
 - A running Minecraft server (Paper 1.19.2 works). Offline mode must be enabled.
 - The bot username must be OP (example: `op executor_bot`).
 - Node.js >= 18 and repo deps installed.
+- Superflat world: set `level-type=flat` and `level-name=view_building_demo_flat` in `~/mc-server/server.properties`, then restart the server.
+- Python deps for HF inference: `transformers` + `torch` (CPU-only torch is OK).
 
 ## Install deps
 
@@ -30,6 +32,28 @@ node test/view_building_demo/build_house_demo.cjs \
   --viewer-port 3000
 ```
 
+HF Qwen3 (default) options:
+
+```bash
+node test/view_building_demo/build_house_demo.cjs --llm-model Qwen/Qwen3-8B
+```
+
+Force CPU (slower but avoids CUDA libs):
+
+```bash
+node test/view_building_demo/build_house_demo.cjs --llm-device cpu
+```
+
+OpenAI-compatible API (optional):
+
+```bash
+export LLM_API_KEY=...
+export LLM_MODEL=gpt-4o-mini
+export LLM_BASE_URL=https://api.openai.com/v1
+
+node test/view_building_demo/build_house_demo.cjs --llm-mode openai
+```
+
 Open the viewer in a browser:
 
 - http://127.0.0.1:3000/
@@ -37,6 +61,8 @@ Open the viewer in a browser:
 ## Notes
 
 - The "LLM" prompt is in `test/view_building_demo/llm_prompt.txt`.
-- The demo uses a deterministic LLM stub inside `build_house_demo.cjs`. Swap it with a real model call if needed.
+- Default LLM backend is `hf` (Hugging Face). Use `--llm-mode openai` for API mode.
+- Use `--llm-mode stub` to run the deterministic offline stub.
+- For local OpenAI-compatible servers without a key, pass `--llm-allow-no-key true` or set `LLM_ALLOW_NO_KEY=true`.
 - The demo writes the last prompt + command list to `test/view_building_demo/llm_output.txt`.
 - Use `--keep-alive false` if you want the process to exit after building.

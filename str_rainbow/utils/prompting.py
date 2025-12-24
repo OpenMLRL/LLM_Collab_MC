@@ -64,7 +64,6 @@ Constraints:
 - Use absolute integer coordinates only (no ~).
 - Place blocks ONLY at '#' positions; leave '.' as air.
 - Adjacent blocks (sharing a side) must NOT be the same color.
-- Adjacency definition: blocks at (x1, y1, z) and (x2, y2, z) are adjacent iff |x1 - x2| + |y1 - y2| = 1.
 - Every coordinate must be within the bbox.
 Format: /setblock <x> <y> <z> <block>
 """
@@ -98,7 +97,6 @@ Constraints:
 - Use absolute integer coordinates only (no ~).
 - Place blocks ONLY at '#' positions; leave '.' as air.
 - Adjacent blocks (sharing a side) must NOT be the same color.
-- Adjacency definition: blocks at (x1, y1, z) and (x2, y2, z) are adjacent iff |x1 - x2| + |y1 - y2| = 1.
 - Every coordinate must be within the bbox.
 Format: /setblock <x> <y> <z> <block>
 """

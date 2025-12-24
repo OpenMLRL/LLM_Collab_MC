@@ -59,7 +59,7 @@ trainer:
   logging_steps: 20
   save_steps: 200
   num_generations: 2
-  max_new_tokens: 500
+  max_new_tokens: 700
   temperature: 0.6
   top_p: 0.95
   # Set >1 to enable multi-turn training with external feedback prompts.
