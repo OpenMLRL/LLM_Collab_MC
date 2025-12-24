@@ -7,18 +7,51 @@ Use /fill and /setblock commands only.
 Build relative to the provided origin (x0, y0, z0) which is the south-west corner of the floor.
 Output commands only, one per line.
 
-# origin: 135 60 135
+Origin (x0, y0, z0): 4 -60 6
+
+# origin: 4 -60 6
+# LLM raw output
+/fill 4 -60 6 5 -58 8 dirt
+/setblock 4 -58 6 crafting_table
+/setblock 5 -58 6 crafting_table
+/setblock 4 -57 6 crafting_table
+/setblock 5 -57 6 crafting_table
+/setblock 4 -56 6 crafting_table
+/setblock 5 -56 6 crafting_table
+/setblock 4 -55 6 crafting_table
+/setblock 5 -55 6 crafting_table
+/setblock 4 -54 6 crafting_table
+/setblock 5 -54 6 crafting_table
+/setblock 4 -53 6 crafting_table
+/setblock 5 -53 6 crafting_table
+/setblock 4 -52 6 crafting_table
+/setblock 5 -52 6 crafting_table
+/setblock 4 -51 6 crafting_table
+/setblock 5 -51 6 crafting_table
+/setblock 4 -50 6 crafting_table
+/setblock 5 -50 6 crafting_table
+/setblock 4 -49 6 crafting_table
+/setblock 5 -49 6 crafting
+
 # LLM output commands
-/fill 134 60 134 142 66 142 air
-/fill 135 60 135 141 60 141 oak_planks
-/fill 135 61 135 141 63 141 spruce_planks
-/fill 136 61 136 140 63 140 air
-/setblock 138 61 135 oak_door[facing=south,half=lower]
-/setblock 138 62 135 oak_door[facing=south,half=upper]
-/setblock 141 62 138 glass_pane
-/setblock 141 63 138 glass_pane
-/fill 135 64 135 141 64 141 spruce_planks
-/setblock 137 61 137 crafting_table
-/setblock 139 61 137 bookshelf
-/setblock 137 61 139 furnace
-/setblock 139 61 139 jack_o_lantern
+/fill 4 -60 6 5 -58 8 dirt
+/setblock 4 -58 6 crafting_table
+/setblock 5 -58 6 crafting_table
+/setblock 4 -57 6 crafting_table
+/setblock 5 -57 6 crafting_table
+/setblock 4 -56 6 crafting_table
+/setblock 5 -56 6 crafting_table
+/setblock 4 -55 6 crafting_table
+/setblock 5 -55 6 crafting_table
+/setblock 4 -54 6 crafting_table
+/setblock 5 -54 6 crafting_table
+/setblock 4 -53 6 crafting_table
+/setblock 5 -53 6 crafting_table
+/setblock 4 -52 6 crafting_table
+/setblock 5 -52 6 crafting_table
+/setblock 4 -51 6 crafting_table
+/setblock 5 -51 6 crafting_table
+/setblock 4 -50 6 crafting_table
+/setblock 5 -50 6 crafting_table
+/setblock 4 -49 6 crafting_table
+/setblock 5 -49 6 crafting

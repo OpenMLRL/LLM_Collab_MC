@@ -32,6 +32,30 @@ node test/view_building_demo/build_house_demo.cjs \
   --viewer-port 3000
 ```
 
+## Slurm (GPU) run
+
+If CPU inference is too slow, run on a GPU node with an interactive allocation (same idea as `baselines/2d_painting`):
+
+```bash
+salloc --account=YOUR_ACCOUNT --partition=YOUR_PARTITION --nodes=1 --gpus-per-node=1 --ntasks=1 --cpus-per-task=16 --mem=64g --time=02:00:00
+srun --pty bash
+```
+
+On that compute node, start the Minecraft server:
+
+```bash
+cd ~/mc-server && java -Xms1G -Xmx1G -jar paper-1.19.2-307.jar --nogui
+```
+
+In a second shell on the same allocation (use `tmux`, or another `srun --pty bash`), run the demo:
+
+```bash
+cd ~/LLM_Collab_MC
+node test/view_building_demo/build_house_demo.cjs --llm-device cuda --viewer-port 3000
+```
+
+Note: in Slurm jobs, `127.0.0.1` points to the compute node, so keep server + demo on the same node.
+
 HF Qwen3 (default) options:
 
 ```bash

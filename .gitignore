@@ -11,6 +11,10 @@ baselines/**/run.sh
 baselines/**/run_sbatch.sh
 baselines/**/config.mc*.yaml
 
+# View building demo (personal sbatch wrapper)
+test/view_building_demo/run_sbatch.sh
+test/view_building_demo/slurm_logs/
+
 # Training scripts
 str_builder/scripts/**/*.sh
 !str_builder/scripts/**/*.example.sh

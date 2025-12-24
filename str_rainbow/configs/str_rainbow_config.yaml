@@ -17,9 +17,9 @@ data:
 
 task:
   # Allowed blocks for agent1 (and single-agent).
-  block_agent1: [black_concrete, red_concrete]
+  block_agent1: [black_concrete]
   # Allowed blocks for agent2 (only used when collab.num_agents=2).
-  block_agent2: [white_concrete]
+  block_agent2: [white_concrete, red_concrete]
   # Cap accepted commands per agent (extra commands are rejected for reward).
   max_commands: 300
 
