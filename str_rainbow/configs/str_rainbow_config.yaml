@@ -53,13 +53,13 @@ model:
 trainer:
   # Set by scripts (supports [jobid] placeholder).
   output_dir: TODO
-  num_train_epochs: 100
+  num_train_epochs: 50
   per_device_train_batch_size: 1
-  learning_rate: 3e-6
+  learning_rate: 6e-6
   logging_steps: 20
   save_steps: 200
   num_generations: 2
-  max_new_tokens: 700
+  max_new_tokens: 512
   temperature: 0.6
   top_p: 0.95
   # Set >1 to enable multi-turn training with external feedback prompts.
