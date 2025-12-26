@@ -74,7 +74,8 @@ prompt:
     Allowed blocks (use ONLY these):
     {block_agent1_lines}
 
-    Layers (y from min_y to max_y; each layer lists rows for z=min_z..max_z):
+    Layers (ascending WORLD y). Each layer is a set of rectangles in WORLD (x,z) coords:
+    - Format: y=ABS_Y: {{(x1, z1, x2, z2 block_id), (x1, z1, x2, z2 block_id)}}
     {layers_text}
 
     WORLD bbox (inclusive):
@@ -89,7 +90,8 @@ prompt:
 
     Constraints:
     - Output ONLY Minecraft commands, one per line.
-    - Allowed commands: /setblock, /fill
+    - Allowed commands: /fill only
+    - Fill format: /fill x1 y1 z1 x2 y2 z2 block
     - Use absolute integer coordinates only (no ~).
     - Use ONLY blocks from the legend.
     - Every coordinate must be within the bbox.
@@ -106,7 +108,8 @@ prompt:
     Allowed blocks (use ONLY these):
     {block_agent1_lines}
 
-    Layers (y from min_y to max_y; each layer lists rows for z=min_z..max_z):
+    Layers (ascending WORLD y). Each layer is a set of rectangles in WORLD (x,z) coords:
+    - Format: y=ABS_Y: {{(x1, z1, x2, z2 block_id), (x1, z1, x2, z2 block_id)}}
     {layers_text}
 
     WORLD bbox (inclusive):
@@ -121,7 +124,8 @@ prompt:
 
     Constraints:
     - Output ONLY Minecraft commands, one per line.
-    - Allowed commands: /setblock, /fill
+    - Allowed commands: /fill only
+    - Fill format: /fill x1 y1 z1 x2 y2 z2 block
     - Use absolute integer coordinates only (no ~).
     - Use ONLY blocks from the legend.
     - Every coordinate must be within the bbox.
@@ -137,7 +141,8 @@ prompt:
     Allowed blocks (use ONLY these):
     {block_agent2_lines}
 
-    Layers (y from min_y to max_y; each layer lists rows for z=min_z..max_z):
+    Layers (ascending WORLD y). Each layer is a set of rectangles in WORLD (x,z) coords:
+    - Format: y=ABS_Y: {{(x1, z1, x2, z2 block_id), (x1, z1, x2, z2 block_id)}}
     {layers_text}
 
     WORLD bbox (inclusive):
@@ -152,7 +157,8 @@ prompt:
 
     Constraints:
     - Output ONLY Minecraft commands, one per line.
-    - Allowed commands: /setblock, /fill
+    - Allowed commands: /fill only
+    - Fill format: /fill x1 y1 z1 x2 y2 z2 block
     - Use absolute integer coordinates only (no ~).
     - Use ONLY blocks from the legend.
     - Every coordinate must be within the bbox.

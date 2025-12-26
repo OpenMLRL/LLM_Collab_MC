@@ -164,8 +164,10 @@ def _validate_and_normalize_mc_commands(
     world_bbox_from: list[int],
     world_bbox_to: list[int],
     max_commands: int,
+    allowed_commands: set[str] | None = None,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     allowed = {_normalize_block_id(b) for b in allowed_blocks}
+    allowed_cmds = allowed_commands or {"setblock", "fill"}
     min_x = min(world_bbox_from[0], world_bbox_to[0])
     max_x = max(world_bbox_from[0], world_bbox_to[0])
     min_y = min(world_bbox_from[1], world_bbox_to[1])
@@ -196,6 +198,9 @@ def _validate_and_normalize_mc_commands(
         cmd = parts[0].lower()
 
         if cmd == "setblock":
+            if "setblock" not in allowed_cmds:
+                rejected.append({"line": line, "reason": "unsupported command: setblock"})
+                continue
             if len(parts) < 5:
                 rejected.append({"line": line, "reason": "setblock needs: /setblock x y z block"})
                 continue
@@ -216,6 +221,9 @@ def _validate_and_normalize_mc_commands(
             continue
 
         if cmd == "fill":
+            if "fill" not in allowed_cmds:
+                rejected.append({"line": line, "reason": "unsupported command: fill"})
+                continue
             if len(parts) < 8:
                 rejected.append({"line": line, "reason": "fill needs: /fill x1 y1 z1 x2 y2 z2 block"})
                 continue
@@ -680,16 +688,82 @@ def _load_tasks_from_json(json_path: Path) -> list[TaskSpec]:
     return tasks
 
 
-def _format_layers_text(task: TaskSpec) -> str:
+def _rows_to_rects(
+    *,
+    rows: list[str],
+    palette: dict[str, str],
+    min_x: int,
+    min_z: int,
+) -> list[tuple[int, int, int, int, str]]:
+    if not rows:
+        return []
+    width = len(rows[0])
+    for row in rows:
+        if len(row) != width:
+            raise ValueError("row width mismatch while building rectangles")
+
+    rects: list[tuple[int, int, int, int, str]] = []
+    active: dict[tuple[int, int, str], list[int | str]] = {}
+
+    for z_idx, row in enumerate(rows):
+        runs: list[tuple[int, int, str]] = []
+        start = 0
+        cur = row[0]
+        for x in range(1, width + 1):
+            if x == width or row[x] != cur:
+                runs.append((start, x - 1, cur))
+                start = x
+                if x < width:
+                    cur = row[x]
+
+        new_active: dict[tuple[int, int, str], list[int | str]] = {}
+        for x1, x2, ch in runs:
+            block = palette.get(ch)
+            if block is None:
+                raise ValueError(f"unknown palette key {ch!r} in layer")
+            key = (x1, x2, block)
+            if key in active:
+                rect = active.pop(key)
+                rect[3] = min_z + z_idx  # extend z2
+                new_active[key] = rect
+            else:
+                rect = [min_x + x1, min_z + z_idx, min_x + x2, min_z + z_idx, block]
+                new_active[key] = rect
+
+        for rect in active.values():
+            rects.append((rect[0], rect[1], rect[2], rect[3], str(rect[4])))
+        active = new_active
+
+    for rect in active.values():
+        rects.append((rect[0], rect[1], rect[2], rect[3], str(rect[4])))
+
+    return rects
+
+
+def _format_layers_text(task: TaskSpec, *, world_from: list[int] | None = None) -> str:
     min_y = min(task.local_bbox_from[1], task.local_bbox_to[1])
     max_y = max(task.local_bbox_from[1], task.local_bbox_to[1])
+    min_x = min(task.local_bbox_from[0], task.local_bbox_to[0])
+    min_z = min(task.local_bbox_from[2], task.local_bbox_to[2])
+    if world_from is None:
+        offset_x = 0
+        offset_y = 0
+        offset_z = 0
+    else:
+        offset_x = int(world_from[0]) - min_x
+        offset_y = int(world_from[1]) - min_y
+        offset_z = int(world_from[2]) - min_z
     lines: list[str] = []
     for y in range(min_y, max_y + 1):
         rows = task.layers_by_y.get(y)
         if rows is None:
             raise ValueError(f"{task.task_id}: missing layer y={y}")
-        lines.append(f"y={y}:")
-        lines.extend(rows)
+        rects = _rows_to_rects(rows=rows, palette=task.palette, min_x=min_x, min_z=min_z)
+        rect_parts = [
+            f"({x1 + offset_x}, {z1 + offset_z}, {x2 + offset_x}, {z2 + offset_z} {block})"
+            for x1, z1, x2, z2, block in rects
+        ]
+        lines.append(f"y={y + offset_y}: {{{', '.join(rect_parts)}}}")
     return "\n".join(lines)
 
 
@@ -1099,7 +1173,7 @@ def main() -> int:
         _eprint(f"[dry-run] tasks={len(tasks)} json_path={json_path}")
         for task in tasks[:3]:
             legend_lines = _format_legend_lines(task.palette)
-            layers_text = _format_layers_text(task)
+            layers_text = _format_layers_text(task, world_from=task.local_bbox_from)
             block_agent1_blocks = _build_allowed_blocks(task.palette, block_agent1_override)
             block_agent2_blocks = _build_allowed_blocks(task.palette, block_agent2_override)
             block_agent1_lines = "\n".join(f"- {b}" for b in block_agent1_blocks)
@@ -1349,11 +1423,12 @@ def main() -> int:
                 w_from, w_to = _compute_world_bbox(local_from=local_from, local_to=local_to, world_origin=world_origin)
 
             legend_lines = _format_legend_lines(task.palette)
-            layers_text = _format_layers_text(task)
+            layers_text = _format_layers_text(task, world_from=w_from)
             allowed_blocks_agent1 = _build_allowed_blocks(task.palette, block_agent1_override)
             allowed_blocks_agent2 = _build_allowed_blocks(task.palette, block_agent2_override)
             block_agent1_lines = "\n".join(f"- {b}" for b in allowed_blocks_agent1)
             block_agent2_lines = "\n".join(f"- {b}" for b in allowed_blocks_agent2)
+            allowed_commands = {"fill"}
             task_json_obj = {
                 "task_id": task.task_id,
                 "bbox": {"from": local_from, "to": local_to},
@@ -1424,6 +1499,7 @@ def main() -> int:
                         world_bbox_from=w_from,
                         world_bbox_to=w_to,
                         max_commands=max_commands_agent1,
+                        allowed_commands=allowed_commands,
                     )
 
                     if args.print_commands:
@@ -1661,6 +1737,7 @@ def main() -> int:
                         world_bbox_from=w_from,
                         world_bbox_to=w_to,
                         max_commands=max_commands_agent1,
+                        allowed_commands=allowed_commands,
                     )
                     accepted_2, rejected_2 = _validate_and_normalize_mc_commands(
                         lines=lines_2,
@@ -1668,6 +1745,7 @@ def main() -> int:
                         world_bbox_from=w_from,
                         world_bbox_to=w_to,
                         max_commands=max_commands_agent2,
+                        allowed_commands=allowed_commands,
                     )
 
                     merged_cmds = [*accepted_1, *accepted_2]
