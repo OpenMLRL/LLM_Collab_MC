@@ -68,6 +68,9 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
     if debug_enabled and debug_max_prints <= 0:
         debug_max_prints = 10
     debug_every_n_calls = _as_int(debug_cfg.get("every_n_calls", 0), 0)
+    debug_empty_char = str(debug_cfg.get("empty_char") or ".")[:1] or "."
+    debug_raw_output = bool(debug_cfg.get("raw_output", False))
+    debug_render_layers = bool(debug_cfg.get("render_merged_layers", True))
     debug_state = {"calls": 0, "printed": 0}
 
     def _allowed_blocks_for_task(task: TaskSpec, overrides: List[str]) -> List[str]:
@@ -75,7 +78,48 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             return unique_block_list(overrides)
         return unique_block_list(task.palette.values())
 
-    def _maybe_debug_print(task: TaskSpec, reward: float, metrics: Mapping[str, Any], turn_idx: int | None) -> None:
+    def _render_layers(task: TaskSpec, obs_map: Mapping[tuple[int, int, int], str]) -> str:
+        palette_rev: Dict[str, str] = {}
+        for key, value in task.palette.items():
+            block_norm = normalize_block_id(value)
+            if block_norm and block_norm not in palette_rev:
+                palette_rev[block_norm] = str(key)
+        air_key = palette_rev.get("air")
+
+        min_x = min(task.local_bbox_from[0], task.local_bbox_to[0])
+        max_x = max(task.local_bbox_from[0], task.local_bbox_to[0])
+        min_y = min(task.local_bbox_from[1], task.local_bbox_to[1])
+        max_y = max(task.local_bbox_from[1], task.local_bbox_to[1])
+        min_z = min(task.local_bbox_from[2], task.local_bbox_to[2])
+        max_z = max(task.local_bbox_from[2], task.local_bbox_to[2])
+
+        lines: List[str] = []
+        for y in range(min_y, max_y + 1):
+            lines.append(f"y={y}:")
+            for z in range(min_z, max_z + 1):
+                row: List[str] = []
+                for x in range(min_x, max_x + 1):
+                    block = normalize_block_id(obs_map.get((x, y, z), "air"))
+                    ch = palette_rev.get(block)
+                    if ch is None:
+                        if block in ("air", "cave_air", "void_air"):
+                            ch = air_key if air_key is not None else debug_empty_char
+                        else:
+                            ch = "?"
+                    row.append(ch)
+                lines.append("".join(row))
+            lines.append("")
+        return "\n".join(lines).rstrip()
+
+    def _maybe_debug_print(
+        *,
+        task: TaskSpec,
+        reward: float,
+        metrics: Mapping[str, Any],
+        blocks: List[Mapping[str, Any]],
+        turn_idx: int | None,
+        raw_outputs: List[str] | None,
+    ) -> None:
         if not debug_enabled:
             return
         debug_state["calls"] += 1
@@ -90,6 +134,17 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             f"reward={reward:.4f} match={float(metrics.get('score_match', 0.0)):.4f}",
             flush=True,
         )
+        if debug_render_layers:
+            obs_map = {
+                (int(b.get("pos")[0]), int(b.get("pos")[1]), int(b.get("pos")[2])): normalize_block_id(b.get("name") or "air")
+                for b in blocks
+                if isinstance(b.get("pos"), list) and len(b.get("pos")) == 3
+            }
+            print(_render_layers(task, obs_map), flush=True)
+        if debug_raw_output and raw_outputs is not None:
+            for idx, raw in enumerate(raw_outputs):
+                print(f"[box_builder raw] agent{idx}:", flush=True)
+                print((raw or "").rstrip(), flush=True)
 
     if num_agents == 1:
         max_commands_agent1 = max_commands_total
@@ -120,7 +175,14 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             metrics = score_box_builder(task=task, world_scan_blocks=blocks)
             reward = float(metrics.get("score_mean", 0.0))
             if debug_enabled:
-                _maybe_debug_print(task, reward, metrics, turn_idx)
+                _maybe_debug_print(
+                    task=task,
+                    reward=reward,
+                    metrics=metrics,
+                    blocks=blocks,
+                    turn_idx=turn_idx,
+                    raw_outputs=[completion],
+                )
             return [reward]
 
         return reward_fn
@@ -176,7 +238,14 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         metrics = score_box_builder(task=task, world_scan_blocks=blocks)
         reward = float(metrics.get("score_mean", 0.0))
         if debug_enabled:
-            _maybe_debug_print(task, reward, metrics, turn_idx)
+            _maybe_debug_print(
+                task=task,
+                reward=reward,
+                metrics=metrics,
+                blocks=blocks,
+                turn_idx=turn_idx,
+                raw_outputs=[c1, c2],
+            )
         return [reward]
 
     return reward_fn

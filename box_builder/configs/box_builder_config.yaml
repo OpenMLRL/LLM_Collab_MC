@@ -54,7 +54,7 @@ trainer:
   learning_rate: 5e-6
   logging_steps: 20
   save_steps: 200
-  num_generations: 3
+  num_generations: 2
   max_new_tokens: 512
   temperature: 0.6
   top_p: 0.95
@@ -70,9 +70,9 @@ debug:
   # - placed blocks are shown as the first letter of the block color (W/B/R/...)
   # - missing target blocks are shown as '#'
   enabled: true
-  max_prints: 1000
+  max_prints: 2000
   # If >0, print every N reward calls (in addition to max_prints cap).
-  every_n_calls: 5
+  every_n_calls: 3
   # Character for empty cells in the debug render.
   empty_char: "."
   # Print raw agent completions when true.
