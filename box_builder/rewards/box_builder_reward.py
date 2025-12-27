@@ -1,0 +1,182 @@
+from __future__ import annotations
+
+import os
+from typing import Any, Callable, Dict, List, Mapping
+
+from LLM_Collab_MC.box_builder.utils.box_builder import (
+    TaskSpec,
+    extract_command_lines,
+    load_tasks_from_json,
+    normalize_block_id,
+    score_box_builder,
+    simulate_commands_to_scan_blocks,
+    unique_block_list,
+    validate_and_normalize_mc_commands,
+)
+
+
+def _as_int(x: Any, default: int) -> int:
+    try:
+        return int(x)
+    except Exception:
+        return int(default)
+
+
+def _task_from_batch_item(item: Mapping[str, Any]) -> TaskSpec:
+    palette_raw = item.get("palette") or {}
+    layers_by_y = item.get("layers_by_y") or {}
+    if isinstance(layers_by_y, dict):
+        layers_by_y = {int(k): list(v) for k, v in layers_by_y.items()}
+    return TaskSpec(
+        task_id=str(item.get("task_id") or ""),
+        local_bbox_from=[_as_int(v, 0) for v in (item.get("local_bbox_from") or [0, 0, 0])],
+        local_bbox_to=[_as_int(v, 0) for v in (item.get("local_bbox_to") or [0, 0, 0])],
+        palette={str(k): str(v) for k, v in palette_raw.items()},
+        layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
+    )
+
+
+def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[..., List[float]]:
+    task_cfg = cfg.get("task") or {}
+    if not isinstance(task_cfg, dict):
+        task_cfg = {}
+
+    max_commands_total = _as_int(task_cfg.get("max_commands", 600), 600)
+
+    def _as_block_list(v: Any) -> List[str]:
+        if v is None:
+            return []
+        if isinstance(v, (list, tuple)):
+            out = []
+            for x in v:
+                s = str(x).strip()
+                if s:
+                    out.append(s)
+            return out
+        s = str(v).strip()
+        return [s] if s else []
+
+    block_agent1_override = _as_block_list(task_cfg.get("block_agent1"))
+    block_agent2_override = _as_block_list(task_cfg.get("block_agent2"))
+
+    debug_cfg = cfg.get("debug") or {}
+    if not isinstance(debug_cfg, dict):
+        debug_cfg = {}
+
+    debug_enabled = bool(debug_cfg.get("enabled", False)) or (os.environ.get("BOX_BUILDER_DEBUG") == "1")
+    debug_max_prints = _as_int(debug_cfg.get("max_prints", 0), 0)
+    if debug_enabled and debug_max_prints <= 0:
+        debug_max_prints = 10
+    debug_every_n_calls = _as_int(debug_cfg.get("every_n_calls", 0), 0)
+    debug_state = {"calls": 0, "printed": 0}
+
+    def _allowed_blocks_for_task(task: TaskSpec, overrides: List[str]) -> List[str]:
+        if overrides:
+            return unique_block_list(overrides)
+        return unique_block_list(task.palette.values())
+
+    def _maybe_debug_print(task: TaskSpec, reward: float, metrics: Mapping[str, Any], turn_idx: int | None) -> None:
+        if not debug_enabled:
+            return
+        debug_state["calls"] += 1
+        if debug_state["printed"] >= debug_max_prints:
+            return
+        if debug_every_n_calls > 0 and (debug_state["calls"] % debug_every_n_calls) != 0:
+            return
+        debug_state["printed"] += 1
+        turn_str = f" turn={int(turn_idx)}" if turn_idx is not None else ""
+        print(
+            f"[box_builder debug] {task.task_id}{turn_str} "
+            f"reward={reward:.4f} match={float(metrics.get('score_match', 0.0)):.4f}",
+            flush=True,
+        )
+
+    if num_agents == 1:
+        max_commands_agent1 = max_commands_total
+
+        def reward_fn(agent1_completions: List[str], *, batch_items: List[Mapping[str, Any]] | None = None) -> List[float]:
+            batch_item = (batch_items or [{}])[0]
+            task = _task_from_batch_item(batch_item)
+            turn_idx = None
+            if isinstance(batch_item, Mapping):
+                turn_idx = batch_item.get("_box_builder_turn")
+
+            allowed_blocks = _allowed_blocks_for_task(task, block_agent1_override)
+            completion = agent1_completions[0] if agent1_completions else ""
+            lines = extract_command_lines(completion)
+            accepted, _rejected = validate_and_normalize_mc_commands(
+                lines=lines,
+                allowed_blocks=allowed_blocks,
+                world_bbox_from=task.local_bbox_from,
+                world_bbox_to=task.local_bbox_to,
+                max_commands=max_commands_agent1,
+            )
+
+            blocks = simulate_commands_to_scan_blocks(
+                commands=accepted,
+                world_bbox_from=task.local_bbox_from,
+                world_bbox_to=task.local_bbox_to,
+            )
+            metrics = score_box_builder(task=task, world_scan_blocks=blocks)
+            reward = float(metrics.get("score_mean", 0.0))
+            if debug_enabled:
+                _maybe_debug_print(task, reward, metrics, turn_idx)
+            return [reward]
+
+        return reward_fn
+
+    if num_agents != 2:
+        raise ValueError("num_agents must be 1 or 2")
+
+    max_commands_per_agent = max(1, max_commands_total // num_agents)
+    max_commands_agent1 = max_commands_per_agent + (max_commands_total % num_agents)
+    max_commands_agent2 = max_commands_per_agent
+
+    def reward_fn(
+        agent1_completions: List[str],
+        agent2_completions: List[str],
+        *,
+        batch_items: List[Mapping[str, Any]] | None = None,
+    ) -> List[float]:
+        batch_item = (batch_items or [{}])[0]
+        task = _task_from_batch_item(batch_item)
+        turn_idx = None
+        if isinstance(batch_item, Mapping):
+            turn_idx = batch_item.get("_box_builder_turn")
+
+        allowed_blocks_agent1 = _allowed_blocks_for_task(task, block_agent1_override)
+        allowed_blocks_agent2 = _allowed_blocks_for_task(task, block_agent2_override)
+
+        c1 = agent1_completions[0] if agent1_completions else ""
+        c2 = agent2_completions[0] if agent2_completions else ""
+
+        lines_1 = extract_command_lines(c1)
+        lines_2 = extract_command_lines(c2)
+        accepted_1, _rejected_1 = validate_and_normalize_mc_commands(
+            lines=lines_1,
+            allowed_blocks=allowed_blocks_agent1,
+            world_bbox_from=task.local_bbox_from,
+            world_bbox_to=task.local_bbox_to,
+            max_commands=max_commands_agent1,
+        )
+        accepted_2, _rejected_2 = validate_and_normalize_mc_commands(
+            lines=lines_2,
+            allowed_blocks=allowed_blocks_agent2,
+            world_bbox_from=task.local_bbox_from,
+            world_bbox_to=task.local_bbox_to,
+            max_commands=max_commands_agent2,
+        )
+
+        merged = [*accepted_1, *accepted_2]
+        blocks = simulate_commands_to_scan_blocks(
+            commands=merged,
+            world_bbox_from=task.local_bbox_from,
+            world_bbox_to=task.local_bbox_to,
+        )
+        metrics = score_box_builder(task=task, world_scan_blocks=blocks)
+        reward = float(metrics.get("score_mean", 0.0))
+        if debug_enabled:
+            _maybe_debug_print(task, reward, metrics, turn_idx)
+        return [reward]
+
+    return reward_fn

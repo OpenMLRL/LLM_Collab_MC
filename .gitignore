@@ -25,3 +25,6 @@ str_painter/scripts/**/*.out
 str_rainbow/scripts/**/*.sh
 !str_rainbow/scripts/**/*.example.sh
 str_rainbow/scripts/**/*.out
+box_builder/scripts/**/*.sh
+!box_builder/scripts/**/*.example.sh
+box_builder/scripts/**/*.out
