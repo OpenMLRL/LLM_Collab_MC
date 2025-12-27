@@ -34,7 +34,7 @@ Constraints:
 - Every coordinate must be within the bbox.
 """
 
-DEFAULT_USER_TEMPLATE_AGENT1 = """You are Agent 1 in a 2-person Minecraft building team. You will place SOME of the blocks for the final build.
+DEFAULT_USER_TEMPLATE_AGENT1 = """You are Agent 1 in a 2-person Minecraft building team. You will place SOME of the blocks for the final build. Suggested: build the y<=2 portion.
 
 Task: Build the 3D structure from the provided y-axis slices.
 
@@ -61,7 +61,7 @@ Constraints:
 - Every coordinate must be within the bbox.
 """
 
-DEFAULT_USER_TEMPLATE_AGENT2 = """You are Agent 2 in a 2-person Minecraft building team. You will place SOME of the blocks for the final build.
+DEFAULT_USER_TEMPLATE_AGENT2 = """You are Agent 2 in a 2-person Minecraft building team. You will place SOME of the blocks for the final build. Suggested: build the y>=2 portion.
 
 Task: Build the 3D structure from the provided y-axis slices.
 

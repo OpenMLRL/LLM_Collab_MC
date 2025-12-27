@@ -6,7 +6,7 @@ seed: 42
 
 collab:
   # GRPO = num_agents=1. (CoMLRL's MAGRPOTrainer supports num_agents>=1.)
-  num_agents: 1
+  num_agents: 2
 
 data:
   # Path is resolved relative to this config file.
@@ -28,7 +28,7 @@ prompt:
 
 external:
   # Only used when trainer.num_turns > 1.
-  mode: position_modification
+  mode: rect_modification
   # Include the original (turn-1) prompt in external feedback.
   original_prompt: true
   # Optionally include previous commands verbatim (usually keep false).
@@ -57,7 +57,7 @@ trainer:
   logging_steps: 20
   save_steps: 200
   num_generations: 2
-  max_new_tokens: 512
+  max_new_tokens: 600
   temperature: 0.6
   top_p: 0.95
   # Set >1 to enable multi-turn training with external feedback prompts.
@@ -74,7 +74,7 @@ debug:
   enabled: true
   max_prints: 2000
   # If >0, print every N reward calls (in addition to max_prints cap).
-  every_n_calls: 3
+  every_n_calls: 11
   # Character for empty cells in the debug render.
   empty_char: "."
   # Print raw agent completions when true.
