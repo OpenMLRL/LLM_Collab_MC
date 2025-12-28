@@ -530,6 +530,8 @@ def main() -> int:
         modification_limit = external_cfg.get("lim")
         if modification_limit is None:
             modification_limit = external_cfg.get("modification_limit")
+        common_prefix = external_cfg.get("common_prefix")
+        common_suffix = external_cfg.get("common_suffix")
 
         num_agents_default = int(num_agents)
 
@@ -543,6 +545,8 @@ def main() -> int:
                 limit=modification_limit,
                 original_prompt=original_prompt_flag,
                 previous_response=previous_response_flag,
+                common_prefix=common_prefix,
+                common_suffix=common_suffix,
                 prompt_history_per_agent=_kwargs.get("prompt_history_per_agent"),
                 response_history_per_agent=_kwargs.get("response_history_per_agent"),
             )

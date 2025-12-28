@@ -145,7 +145,9 @@ def format_followup_prompts(
     max_limits = _split_limits(max_commands_total, n)
 
     task = _task_from_ctx(ctx)
-    limited_resource = bool(ctx.get("limited_resource", True))
+    limited_resource = bool(ctx.get("limited_resource", False))
+    if not limited_resource:
+        raise ValueError("resource_schedule requires limited_resource=true in task config")
     resource_limits = compute_resource_limits(task, num_agents=n)
 
     rects_all: List[Tuple[int, int, int, int, int, str, int]] = []

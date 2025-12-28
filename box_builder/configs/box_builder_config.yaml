@@ -37,6 +37,9 @@ external:
   previous_response: false
   # Max number of wrong positions to suggest in modification mode.
   lim: 20
+  # Optional common prefix/suffix for all external feedback prompts.
+  common_prefix: null
+  common_suffix: "Do not output any text other than commands."
 
 model:
   name: Qwen/Qwen3-4B-Instruct-2507
