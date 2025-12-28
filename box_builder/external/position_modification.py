@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from LLM_Collab_MC.box_builder.utils.box_builder import (
     TaskSpec,
     build_expected_map,
+    compute_resource_limits,
     extract_command_lines,
     normalize_block_id,
     simulate_commands_to_scan_blocks,
@@ -90,11 +91,14 @@ def format_followup_prompts(
     user_prompt_single = str(ctx.get("user_prompt_single") or "").rstrip()
     user_prompt_agent1 = str(ctx.get("user_prompt_agent1") or user_prompt_single).rstrip()
     user_prompt_agent2 = str(ctx.get("user_prompt_agent2") or user_prompt_single).rstrip()
+    resource_limits_text = str(ctx.get("resource_limits_text") or "").rstrip()
 
     max_commands_total = _as_int(ctx.get("max_commands_total") or 600, 600)
+    limited_resource = bool(ctx.get("limited_resource", False))
     max_limits = _split_limits(max_commands_total, n)
 
     task = _task_from_ctx(ctx)
+    resource_limits = compute_resource_limits(task, num_agents=n) if limited_resource else None
 
     accepted_all: List[str] = []
     for agent_idx in range(n):
@@ -107,6 +111,7 @@ def format_followup_prompts(
             world_bbox_from=task.local_bbox_from,
             world_bbox_to=task.local_bbox_to,
             max_commands=max_limits[agent_idx],
+            resource_limits=resource_limits,
         )
         accepted_all.extend(accepted)
 
@@ -154,6 +159,9 @@ def format_followup_prompts(
         parts: List[str] = []
         if system_prompt:
             parts.append(system_prompt)
+            parts.append("")
+        if resource_limits_text and not original_prompt_flag:
+            parts.append(resource_limits_text)
             parts.append("")
         if original_prompt_flag and base_user:
             parts.append(base_user)

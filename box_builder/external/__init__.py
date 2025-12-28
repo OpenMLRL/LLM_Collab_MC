@@ -15,6 +15,7 @@ from . import perfect_feedback
 from . import position_feedback
 from . import position_modification
 from . import rect_modification
+from . import resource_schedule
 
 
 # Verbose toggle for external previews
@@ -133,6 +134,24 @@ def get_external_transition(
         if VERBOSE:
             print("\n" + "=" * 60)
             print("EXTERNAL MODE PREVIEW: rect_modification")
+            for i, p in enumerate(prompts):
+                print("-" * 60)
+                print(f"AGENT {i} PROMPT:\n{p}")
+            print("=" * 60 + "\n")
+        return prompts
+    if mode_key in ("resource_schedule", "resource-schedule"):
+        prompts = resource_schedule.format_followup_prompts(
+            ctx=ctx,
+            agent_completions=list(agent_completions),
+            num_agents=n,
+            original_prompt_flag=original_prompt_flag,
+            previous_response_flag=previous_response_flag,
+            prompt_history_per_agent=prompt_history_per_agent,
+            response_history_per_agent=response_history_per_agent,
+        )
+        if VERBOSE:
+            print("\n" + "=" * 60)
+            print("EXTERNAL MODE PREVIEW: resource_schedule")
             for i, p in enumerate(prompts):
                 print("-" * 60)
                 print(f"AGENT {i} PROMPT:\n{p}")

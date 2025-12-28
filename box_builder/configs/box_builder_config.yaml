@@ -20,6 +20,8 @@ task:
   block_agent2: []
   # Cap accepted commands per agent (extra commands are rejected for reward).
   max_commands: 600
+  # Enable per-agent resource limits based on target block counts.
+  limited_resource: true
 
 # Prompt templates are defined in utils/prompting.py; override here if needed.
 prompt:
@@ -28,7 +30,7 @@ prompt:
 
 external:
   # Only used when trainer.num_turns > 1.
-  mode: rect_modification
+  mode: resource_schedule
   # Include the original (turn-1) prompt in external feedback.
   original_prompt: true
   # Optionally include previous commands verbatim (usually keep false).

@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Mapping
 
 from LLM_Collab_MC.box_builder.utils.box_builder import (
     TaskSpec,
+    compute_resource_limits,
     extract_command_lines,
     load_tasks_from_json,
     normalize_block_id,
@@ -42,6 +43,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         task_cfg = {}
 
     max_commands_total = _as_int(task_cfg.get("max_commands", 600), 600)
+    limited_resource = bool(task_cfg.get("limited_resource", False))
 
     def _as_block_list(v: Any) -> List[str]:
         if v is None:
@@ -157,6 +159,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
                 turn_idx = batch_item.get("_box_builder_turn")
 
             allowed_blocks = _allowed_blocks_for_task(task, block_agent1_override)
+            resource_limits = compute_resource_limits(task, num_agents=num_agents) if limited_resource else None
             completion = agent1_completions[0] if agent1_completions else ""
             lines = extract_command_lines(completion)
             accepted, _rejected = validate_and_normalize_mc_commands(
@@ -165,6 +168,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
                 world_bbox_from=task.local_bbox_from,
                 world_bbox_to=task.local_bbox_to,
                 max_commands=max_commands_agent1,
+                resource_limits=resource_limits,
             )
 
             blocks = simulate_commands_to_scan_blocks(
@@ -208,6 +212,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
 
         allowed_blocks_agent1 = _allowed_blocks_for_task(task, block_agent1_override)
         allowed_blocks_agent2 = _allowed_blocks_for_task(task, block_agent2_override)
+        resource_limits = compute_resource_limits(task, num_agents=num_agents) if limited_resource else None
 
         c1 = agent1_completions[0] if agent1_completions else ""
         c2 = agent2_completions[0] if agent2_completions else ""
@@ -220,6 +225,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             world_bbox_from=task.local_bbox_from,
             world_bbox_to=task.local_bbox_to,
             max_commands=max_commands_agent1,
+            resource_limits=resource_limits,
         )
         accepted_2, _rejected_2 = validate_and_normalize_mc_commands(
             lines=lines_2,
@@ -227,6 +233,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             world_bbox_from=task.local_bbox_from,
             world_bbox_to=task.local_bbox_to,
             max_commands=max_commands_agent2,
+            resource_limits=resource_limits,
         )
 
         merged = [*accepted_1, *accepted_2]

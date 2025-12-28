@@ -31,9 +31,11 @@ from LLM_Collab_MC.box_builder.external import (
 from LLM_Collab_MC.box_builder.rewards.box_builder_reward import get_reward_function
 from LLM_Collab_MC.box_builder.utils.box_builder import (
     TaskSpec,
+    compute_resource_limits,
     format_layers_text,
     legend_lines,
     load_tasks_from_json,
+    normalize_block_id,
     unique_block_list,
 )
 from LLM_Collab_MC.box_builder.utils.config import apply_overrides, expand_jobid_placeholder, load_yaml, resolve_path
@@ -113,6 +115,7 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
     task_cfg = cfg.get("task") or {}
     if not isinstance(task_cfg, dict):
         task_cfg = {}
+    limited_resource = bool(task_cfg.get("limited_resource", False))
 
     def _as_block_list(v: Any) -> List[str]:
         if v is None:
@@ -143,6 +146,25 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
         if isinstance(palette, dict):
             return unique_block_list(palette.values())
         return []
+
+    def _format_resource_limits(task: TaskSpec) -> str:
+        if not limited_resource:
+            return ""
+        limits = compute_resource_limits(task, num_agents=num_agents)
+        if not limits:
+            return ""
+        lines: List[str] = []
+        for _key, block in task.palette.items():
+            block_norm = normalize_block_id(block)
+            if block_norm in ("air", "cave_air", "void_air"):
+                continue
+            limit_val = limits.get(block_norm)
+            if limit_val is None:
+                continue
+            lines.append(f"- {block_norm}: {limit_val}")
+        if not lines:
+            return ""
+        return "Resource limits per agent (air unlimited):\n" + "\n".join(lines)
 
     def _render(item: Dict[str, Any], tmpl: str) -> str:
         override = _prompt_override(item)
@@ -179,6 +201,9 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
             block_agent1_lines=block_agent1_lines,
             block_agent2_lines=block_agent2_lines,
         ).rstrip()
+        resource_limits_text = _format_resource_limits(task)
+        if resource_limits_text:
+            user = user + "\n\n" + resource_limits_text
         return _render_prompt(
             tokenizer=tokenizer,
             system_prompt=system_prompt,
@@ -371,6 +396,7 @@ def main() -> int:
             task_cfg = {}
 
         max_commands_total = int(task_cfg.get("max_commands") or 600)
+        limited_resource = bool(task_cfg.get("limited_resource", False))
 
         def _as_block_list(v: Any) -> List[str]:
             if v is None:
@@ -424,6 +450,19 @@ def main() -> int:
                 )
                 layers_text = format_layers_text(task, world_from=w_from, include_air=include_air_rects)
                 legend = legend_lines(task.palette)
+                resource_limits = compute_resource_limits(task, num_agents=num_agents) if limited_resource else {}
+                resource_limits_lines: List[str] = []
+                for _key, block in task.palette.items():
+                    block_norm = normalize_block_id(block)
+                    if block_norm in ("air", "cave_air", "void_air"):
+                        continue
+                    limit_val = resource_limits.get(block_norm)
+                    if limit_val is None:
+                        continue
+                    resource_limits_lines.append(f"- {block_norm}: {limit_val}")
+                resource_limits_text = ""
+                if resource_limits_lines:
+                    resource_limits_text = "Resource limits per agent (air unlimited):\n" + "\n".join(resource_limits_lines)
 
                 allowed_blocks_agent1 = _allowed_blocks(item, block_agent1_override)
                 allowed_blocks_agent2 = _allowed_blocks(item, block_agent2_override)
@@ -439,11 +478,19 @@ def main() -> int:
                     "block_agent1_lines": block_agent1_lines,
                     "block_agent2_lines": block_agent2_lines,
                 }
+                base_user_single = user_template.format(**fmt_kwargs).rstrip()
+                base_user_agent1 = user_template_agent1.format(**fmt_kwargs).rstrip()
+                base_user_agent2 = user_template_agent2.format(**fmt_kwargs).rstrip()
+                if resource_limits_text:
+                    base_user_single = base_user_single + "\n\n" + resource_limits_text
+                    base_user_agent1 = base_user_agent1 + "\n\n" + resource_limits_text
+                    base_user_agent2 = base_user_agent2 + "\n\n" + resource_limits_text
+
                 payload = {
                     "system_prompt": system_prompt,
-                    "user_prompt_single": user_template.format(**fmt_kwargs).rstrip(),
-                    "user_prompt_agent1": user_template_agent1.format(**fmt_kwargs).rstrip(),
-                    "user_prompt_agent2": user_template_agent2.format(**fmt_kwargs).rstrip(),
+                    "user_prompt_single": base_user_single,
+                    "user_prompt_agent1": base_user_agent1,
+                    "user_prompt_agent2": base_user_agent2,
                     "task_id": str(item.get("task_id") or ""),
                     "local_bbox_from": [int(v) for v in (w_from or [0, 0, 0])],
                     "local_bbox_to": [int(v) for v in (w_to or [0, 0, 0])],
@@ -452,6 +499,8 @@ def main() -> int:
                     "allowed_blocks_agent1": list(allowed_blocks_agent1),
                     "allowed_blocks_agent2": list(allowed_blocks_agent2),
                     "max_commands_total": max_commands_total,
+                    "limited_resource": limited_resource,
+                    "resource_limits_text": resource_limits_text,
                 }
 
                 ds_key = _normalize_key(str(item.get("prompt") or ""))

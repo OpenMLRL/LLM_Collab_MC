@@ -62,9 +62,21 @@ def validate_and_normalize_mc_commands(
     world_bbox_from: List[int],
     world_bbox_to: List[int],
     max_commands: int,
+    resource_limits: Dict[str, int] | None = None,
 ) -> Tuple[List[str], List[Dict[str, Any]]]:
     allowed = {normalize_block_id(b) for b in allowed_blocks}
     allowed.add("air")
+    norm_limits: Dict[str, int] = {}
+    if resource_limits:
+        for k, v in resource_limits.items():
+            try:
+                limit_val = int(v)
+            except Exception:
+                continue
+            if limit_val < 0:
+                continue
+            norm_limits[normalize_block_id(str(k))] = limit_val
+    resource_used: Dict[str, int] = {}
 
     min_x = min(world_bbox_from[0], world_bbox_to[0])
     max_x = max(world_bbox_from[0], world_bbox_to[0])
@@ -119,6 +131,18 @@ def validate_and_normalize_mc_commands(
         if len(parts) > 8:
             rejected.append({"line": line, "reason": "fill modes (replace/keep/...) not allowed"})
             continue
+        if norm_limits and block not in ("air", "cave_air", "void_air"):
+            limit_val = norm_limits.get(block)
+            if limit_val is not None:
+                dx = abs(int(x2) - int(x1)) + 1
+                dy = abs(int(y2) - int(y1)) + 1
+                dz = abs(int(z2) - int(z1)) + 1
+                volume = int(dx * dy * dz)
+                used = resource_used.get(block, 0)
+                if used + volume > limit_val:
+                    rejected.append({"line": line, "reason": f"exceeds resource limit for {block}: {used + volume}>{limit_val}"})
+                    continue
+                resource_used[block] = used + volume
         accepted.append(f"/fill {int(x1)} {int(y1)} {int(z1)} {int(x2)} {int(y2)} {int(z2)} {block}")
 
     return accepted, rejected
@@ -396,6 +420,29 @@ def build_expected_map(task: TaskSpec) -> Dict[Tuple[int, int, int], str]:
                 expected[(lx, ly, lz)] = block
 
     return expected
+
+
+def count_expected_blocks(task: TaskSpec) -> Dict[str, int]:
+    expected_map = build_expected_map(task)
+    counts: Dict[str, int] = {}
+    for block in expected_map.values():
+        block_norm = normalize_block_id(block)
+        counts[block_norm] = counts.get(block_norm, 0) + 1
+    return counts
+
+
+def compute_resource_limits(task: TaskSpec, *, num_agents: int) -> Dict[str, int]:
+    n = max(1, int(num_agents))
+    counts = count_expected_blocks(task)
+    limits: Dict[str, int] = {}
+    palette_blocks = {normalize_block_id(v) for v in task.palette.values()}
+    for block in sorted(counts.keys() | palette_blocks):
+        if block in ("air", "cave_air", "void_air"):
+            continue
+        count = int(counts.get(block, 0))
+        limit_val = (count + n - 1) // n + (count // (n * 2))
+        limits[block] = int(limit_val)
+    return limits
 
 
 def score_box_builder(*, task: TaskSpec, world_scan_blocks: List[Dict[str, Any]]) -> Dict[str, Any]:

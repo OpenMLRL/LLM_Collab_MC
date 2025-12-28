@@ -4,12 +4,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from LLM_Collab_MC.box_builder.utils.box_builder import (
     TaskSpec,
-    build_expected_map,
     compute_resource_limits,
     extract_command_lines,
     normalize_block_id,
     rows_to_rects,
-    simulate_commands_to_scan_blocks,
     unique_block_list,
     validate_and_normalize_mc_commands,
 )
@@ -71,12 +69,61 @@ def _split_limits(total: int, num_agents: int) -> List[int]:
     return limits
 
 
+def _count_blocks_from_commands(commands: List[str]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for cmd in commands:
+        stripped = (cmd or "").strip()
+        if stripped.startswith("/"):
+            stripped = stripped[1:].lstrip()
+        parts = stripped.split()
+        if len(parts) < 8 or parts[0].lower() != "fill":
+            continue
+        try:
+            x1, y1, z1 = int(parts[1]), int(parts[2]), int(parts[3])
+            x2, y2, z2 = int(parts[4]), int(parts[5]), int(parts[6])
+        except Exception:
+            continue
+        block = normalize_block_id(parts[7])
+        dx = abs(x2 - x1) + 1
+        dy = abs(y2 - y1) + 1
+        dz = abs(z2 - z1) + 1
+        volume = int(dx * dy * dz)
+        counts[block] = counts.get(block, 0) + volume
+    return counts
+
+
+def _best_subrect(
+    *,
+    x1: int,
+    z1: int,
+    x2: int,
+    z2: int,
+    max_area: int,
+) -> Tuple[int, int, int, int, int]:
+    width = x2 - x1 + 1
+    depth = z2 - z1 + 1
+    best_area = 0
+    best_w = 0
+    best_d = 0
+    for w in range(width, 0, -1):
+        d = min(depth, max_area // w)
+        area = w * d
+        if area > best_area:
+            best_area = area
+            best_w = w
+            best_d = d
+        if best_area == max_area:
+            break
+    if best_area <= 0:
+        return x1, z1, x1, z1, 0
+    return x1, z1, x1 + best_w - 1, z1 + best_d - 1, best_area
+
+
 def format_followup_prompts(
     *,
     ctx: Dict[str, Any],
     agent_completions: List[str],
     num_agents: int = 2,
-    limit: int | None = None,
     original_prompt_flag: bool = True,
     previous_response_flag: bool = False,
     prompt_history_per_agent: Optional[List[List[str]]] = None,
@@ -95,14 +142,26 @@ def format_followup_prompts(
     resource_limits_text = str(ctx.get("resource_limits_text") or "").rstrip()
 
     max_commands_total = _as_int(ctx.get("max_commands_total") or 600, 600)
-    limited_resource = bool(ctx.get("limited_resource", False))
     max_limits = _split_limits(max_commands_total, n)
 
     task = _task_from_ctx(ctx)
-    resource_limits = compute_resource_limits(task, num_agents=n) if limited_resource else None
+    limited_resource = bool(ctx.get("limited_resource", True))
+    resource_limits = compute_resource_limits(task, num_agents=n)
+
+    rects_all: List[Tuple[int, int, int, int, int, str, int]] = []
+    min_x = min(task.local_bbox_from[0], task.local_bbox_to[0])
+    min_z = min(task.local_bbox_from[2], task.local_bbox_to[2])
+    for y, rows in task.layers_by_y.items():
+        rects = rows_to_rects(rows=rows, palette=task.palette, min_x=min_x, min_z=min_z)
+        for x1, z1, x2, z2, block in rects:
+            block_norm = normalize_block_id(block)
+            if block_norm in ("air", "cave_air", "void_air"):
+                continue
+            area = (x2 - x1 + 1) * (z2 - z1 + 1)
+            rects_all.append((int(y), int(x1), int(z1), int(x2), int(z2), block_norm, int(area)))
 
     accepted_by_agent: List[List[str]] = []
-    accepted_all: List[str] = []
+    used_by_agent: List[Dict[str, int]] = []
     for agent_idx in range(n):
         allowed = _allowed_blocks(ctx, agent_idx, task.palette)
         completion = agent_completions[agent_idx] if agent_idx < len(agent_completions) else ""
@@ -113,83 +172,79 @@ def format_followup_prompts(
             world_bbox_from=task.local_bbox_from,
             world_bbox_to=task.local_bbox_to,
             max_commands=max_limits[agent_idx],
-            resource_limits=resource_limits,
+            resource_limits=resource_limits if limited_resource else None,
         )
         accepted_by_agent.append(accepted)
-        accepted_all.extend(accepted)
-
-    blocks = simulate_commands_to_scan_blocks(
-        commands=accepted_all,
-        world_bbox_from=task.local_bbox_from,
-        world_bbox_to=task.local_bbox_to,
-    )
-
-    expected_map = build_expected_map(task)
-
-    observed: Dict[Tuple[int, int, int], str] = {}
-    for b in blocks:
-        pos = b.get("pos")
-        name = b.get("name")
-        if not (isinstance(pos, list) and len(pos) == 3):
-            continue
-        observed[(int(pos[0]), int(pos[1]), int(pos[2]))] = normalize_block_id(str(name or "air"))
-
-    wrong_positions: List[Tuple[Tuple[int, int, int], str]] = []
-    for pos, expected in expected_map.items():
-        expected_norm = normalize_block_id(expected)
-        observed_norm = normalize_block_id(observed.get(pos, "air"))
-        if observed_norm != expected_norm:
-            wrong_positions.append((pos, expected_norm))
-
-    min_x = min(task.local_bbox_from[0], task.local_bbox_to[0])
-    min_z = min(task.local_bbox_from[2], task.local_bbox_to[2])
-    rects_by_y: Dict[int, List[Tuple[int, int, int, int, str]]] = {}
-    for y, rows in task.layers_by_y.items():
-        rects = rows_to_rects(rows=rows, palette=task.palette, min_x=min_x, min_z=min_z)
-        rects_by_y[int(y)] = rects
-
-    rect_set: Dict[Tuple[int, int, int, int, int, str], None] = {}
-    for (x, y, z), expected in wrong_positions:
-        rects = rects_by_y.get(int(y)) or []
-        for x1, z1, x2, z2, block in rects:
-            if normalize_block_id(block) != expected:
-                continue
-            if x1 <= x <= x2 and z1 <= z <= z2:
-                rect_set[(int(y), int(x1), int(z1), int(x2), int(z2), expected)] = None
-                break
-
-    rects_all = sorted(rect_set.keys(), key=lambda r: (r[0], r[1], r[2], r[3], r[4], r[5]))
-
-    lim = limit
-    if lim is None:
-        lim = _as_int(ctx.get("rect_limit") or ctx.get("lim") or 0, 0)
-
-    def _filter_rects(rects: List[Tuple[int, int, int, int, int, str]], agent_idx: int) -> List[Tuple[int, int, int, int, int, str]]:
-        if n == 1:
-            return rects
-        if agent_idx == 0:
-            return [r for r in rects if r[0] <= 2]
-        return [r for r in rects if r[0] >= 2]
+        used_by_agent.append(_count_blocks_from_commands(accepted))
 
     def _format_accepted(lines: List[str]) -> str:
         if not lines:
             return "- (none)"
         return "\n".join(f"- {line}" for line in lines)
 
+    def _format_remaining(rem: Dict[str, int], limits: Dict[str, int]) -> str:
+        lines: List[str] = []
+        for _key, block in task.palette.items():
+            block_norm = normalize_block_id(block)
+            if block_norm in ("air", "cave_air", "void_air"):
+                continue
+            if block_norm not in limits:
+                continue
+            lines.append(f"- {block_norm}: {max(0, rem.get(block_norm, 0))}")
+        if not lines:
+            return "(none)"
+        return "\n".join(lines)
+
     def _format_rects(rects: List[Tuple[int, int, int, int, int, str]]) -> str:
         if not rects:
             return "(none)"
-        lines: List[str] = []
-        for y, x1, z1, x2, z2, block in rects:
-            lines.append(f"y={y}: ({x1}, {z1}, {x2}, {z2} {block})")
-        return "\n".join(lines)
+        return "\n".join(f"y={y}: ({x1}, {z1}, {x2}, {z2} {block})" for y, x1, z1, x2, z2, block in rects)
 
     prompts: List[str] = [""] * n
     for agent_idx in range(n):
         base_user = user_prompt_single if n == 1 else (user_prompt_agent1 if agent_idx == 0 else user_prompt_agent2)
-        agent_rects = _filter_rects(rects_all, agent_idx)
-        if lim is not None and lim > 0:
-            agent_rects = agent_rects[: int(lim)]
+        allowed_blocks = _allowed_blocks(ctx, agent_idx, task.palette)
+        allowed_norm = {normalize_block_id(b) for b in allowed_blocks}
+
+        used = used_by_agent[agent_idx]
+        remaining: Dict[str, int] = {}
+        for block, limit_val in resource_limits.items():
+            remaining[block] = int(limit_val) - int(used.get(block, 0))
+
+        candidates = [
+            r for r in rects_all if r[5] in allowed_norm and remaining.get(r[5], 0) > 0
+        ]
+        candidates.sort(key=lambda r: (-r[6], r[0], r[1], r[2], r[3], r[4], r[5]))
+
+        selected: List[Tuple[int, int, int, int, int, str]] = []
+        selected_keys = set()
+        for y, x1, z1, x2, z2, block, area in candidates:
+            if remaining.get(block, 0) >= area:
+                selected.append((y, x1, z1, x2, z2, block))
+                remaining[block] = remaining.get(block, 0) - area
+                selected_keys.add((y, x1, z1, x2, z2, block))
+
+        best_partial = None
+        best_area = 0
+        for y, x1, z1, x2, z2, block, area in candidates:
+            if (y, x1, z1, x2, z2, block) in selected_keys:
+                continue
+            rem = remaining.get(block, 0)
+            if rem <= 0 or area <= 0:
+                continue
+            px1, pz1, px2, pz2, parea = _best_subrect(
+                x1=x1,
+                z1=z1,
+                x2=x2,
+                z2=z2,
+                max_area=rem,
+            )
+            if parea > best_area:
+                best_area = parea
+                best_partial = (y, px1, pz1, px2, pz2, block)
+
+        if best_partial is not None and best_area > 0:
+            selected.append(best_partial)
 
         parts: List[str] = []
         if system_prompt:
@@ -201,12 +256,14 @@ def format_followup_prompts(
         if original_prompt_flag and base_user:
             parts.append(base_user)
             parts.append("")
-        parts.append("Reminder: each turn starts from an empty (all-air) world.")
         parts.append("Accepted commands from your previous turn:")
         parts.append(_format_accepted(accepted_by_agent[agent_idx]))
         parts.append("")
-        parts.append("Suggested rectangles to fix mismatches:")
-        parts.append(_format_rects(agent_rects))
+        parts.append("Remaining resources after previous turn (air unlimited):")
+        parts.append(_format_remaining(remaining, resource_limits))
+        parts.append("")
+        parts.append("Suggested rectangles to build next (greedy by size):")
+        parts.append(_format_rects(selected))
         if previous_response_flag:
             prev = agent_completions[agent_idx] if agent_idx < len(agent_completions) else ""
             if prev.strip():
