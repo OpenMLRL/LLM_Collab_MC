@@ -740,7 +740,9 @@ def _rows_to_rects(
     return rects
 
 
-def _format_layers_text(task: TaskSpec, *, world_from: list[int] | None = None) -> str:
+def _format_layers_text(
+    task: TaskSpec, *, world_from: list[int] | None = None, include_air: bool = True
+) -> str:
     min_y = min(task.local_bbox_from[1], task.local_bbox_to[1])
     max_y = max(task.local_bbox_from[1], task.local_bbox_to[1])
     min_x = min(task.local_bbox_from[0], task.local_bbox_to[0])
@@ -759,6 +761,12 @@ def _format_layers_text(task: TaskSpec, *, world_from: list[int] | None = None) 
         if rows is None:
             raise ValueError(f"{task.task_id}: missing layer y={y}")
         rects = _rows_to_rects(rows=rows, palette=task.palette, min_x=min_x, min_z=min_z)
+        if not include_air:
+            rects = [
+                (x1, z1, x2, z2, block)
+                for x1, z1, x2, z2, block in rects
+                if _normalize_block_id(str(block)) not in ("air", "cave_air", "void_air")
+            ]
         rect_parts = [
             f"({x1 + offset_x}, {z1 + offset_z}, {x2 + offset_x}, {z2 + offset_z} {block})"
             for x1, z1, x2, z2, block in rects
@@ -1124,6 +1132,7 @@ def main() -> int:
     user_template = str(prompt_cfg.get("user_template") or "{task_json}").rstrip()
     user_template_agent1 = str(prompt_cfg.get("user_template_agent1") or user_template).rstrip()
     user_template_agent2 = str(prompt_cfg.get("user_template_agent2") or user_template).rstrip()
+    inform_air = bool(prompt_cfg.get("inform_air", True))
 
     generation_cfg = cfg.get("generation") or {}
     if not isinstance(generation_cfg, dict):
@@ -1173,7 +1182,9 @@ def main() -> int:
         _eprint(f"[dry-run] tasks={len(tasks)} json_path={json_path}")
         for task in tasks[:3]:
             legend_lines = _format_legend_lines(task.palette)
-            layers_text = _format_layers_text(task, world_from=task.local_bbox_from)
+            layers_text = _format_layers_text(
+                task, world_from=task.local_bbox_from, include_air=inform_air
+            )
             block_agent1_blocks = _build_allowed_blocks(task.palette, block_agent1_override)
             block_agent2_blocks = _build_allowed_blocks(task.palette, block_agent2_override)
             block_agent1_lines = "\n".join(f"- {b}" for b in block_agent1_blocks)
@@ -1423,7 +1434,7 @@ def main() -> int:
                 w_from, w_to = _compute_world_bbox(local_from=local_from, local_to=local_to, world_origin=world_origin)
 
             legend_lines = _format_legend_lines(task.palette)
-            layers_text = _format_layers_text(task, world_from=w_from)
+            layers_text = _format_layers_text(task, world_from=w_from, include_air=inform_air)
             allowed_blocks_agent1 = _build_allowed_blocks(task.palette, block_agent1_override)
             allowed_blocks_agent2 = _build_allowed_blocks(task.palette, block_agent2_override)
             block_agent1_lines = "\n".join(f"- {b}" for b in allowed_blocks_agent1)

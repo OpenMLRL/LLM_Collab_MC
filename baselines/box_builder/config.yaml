@@ -9,7 +9,7 @@ agents:
 
 dataset:
   # Path is resolved relative to this config file.
-  json_path: ../../dataset/box_builder/one.json
+  json_path: ../../dataset/box_builder/one2.json
 
 task:
   # Optional: restrict allowed blocks for agents (defaults to dataset palette).
@@ -65,6 +65,7 @@ prompt:
   system: |
     You are a Minecraft building agent.
     Output must be Minecraft commands only (no markdown, no code fences, no extra text).
+  inform_air: false
   user_template: |
     Build the 3D structure from the provided y-axis slices.
 
