@@ -10,7 +10,7 @@ collab:
 
 data:
   # Path is resolved relative to this config file.
-  json_path: ../../dataset/box_builder/one.json
+  json_path: ../../dataset/box_builder/one2.json
   split_ratio: 0.8
 
 task:
@@ -57,7 +57,7 @@ trainer:
   logging_steps: 20
   save_steps: 200
   num_generations: 2
-  max_new_tokens: 600
+  max_new_tokens: 512
   temperature: 0.6
   top_p: 0.95
   # Set >1 to enable multi-turn training with external feedback prompts.

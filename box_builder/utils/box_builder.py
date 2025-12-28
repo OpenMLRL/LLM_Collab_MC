@@ -477,7 +477,12 @@ def rows_to_rects(
     return rects
 
 
-def format_layers_text(task: TaskSpec, *, world_from: List[int] | None = None) -> str:
+def format_layers_text(
+    task: TaskSpec,
+    *,
+    world_from: List[int] | None = None,
+    include_air: bool = False,
+) -> str:
     min_y = min(task.local_bbox_from[1], task.local_bbox_to[1])
     max_y = max(task.local_bbox_from[1], task.local_bbox_to[1])
     min_x = min(task.local_bbox_from[0], task.local_bbox_to[0])
@@ -497,6 +502,8 @@ def format_layers_text(task: TaskSpec, *, world_from: List[int] | None = None) -
         if rows is None:
             raise ValueError(f"{task.task_id}: missing layer y={y}")
         rects = rows_to_rects(rows=rows, palette=task.palette, min_x=min_x, min_z=min_z)
+        if not include_air:
+            rects = [r for r in rects if normalize_block_id(r[4]) not in ("air", "cave_air", "void_air")]
         rect_parts = [
             f"({x1 + offset_x}, {z1 + offset_z}, {x2 + offset_x}, {z2 + offset_z} {block})"
             for x1, z1, x2, z2, block in rects

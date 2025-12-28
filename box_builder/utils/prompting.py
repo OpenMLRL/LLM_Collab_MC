@@ -90,6 +90,7 @@ Constraints:
 
 DEFAULT_PROMPT_CONFIG = {
     "use_chat_template": False,
+    "include_air_rects": False,
     "system": DEFAULT_SYSTEM_PROMPT,
     "user_template": DEFAULT_USER_TEMPLATE,
     "user_template_agent1": DEFAULT_USER_TEMPLATE_AGENT1,

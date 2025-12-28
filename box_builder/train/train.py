@@ -104,6 +104,7 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
     if not isinstance(prompt_cfg, dict):
         prompt_cfg = {}
     use_chat_template = bool(prompt_cfg.get("use_chat_template", False))
+    include_air_rects = bool(prompt_cfg.get("include_air_rects", False))
     system_prompt = str(prompt_cfg.get("system") or "").rstrip()
     user_template = str(prompt_cfg.get("user_template") or "").rstrip()
     user_template_agent1 = str(prompt_cfg.get("user_template_agent1") or user_template).rstrip()
@@ -161,7 +162,7 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
             layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
         )
 
-        layers_text = format_layers_text(task, world_from=w_from)
+        layers_text = format_layers_text(task, world_from=w_from, include_air=include_air_rects)
         legend = legend_lines(task.palette)
 
         allowed_blocks_agent1 = _allowed_blocks(item, block_agent1_override)
@@ -363,6 +364,7 @@ def main() -> int:
         user_template = str(prompt_cfg.get("user_template") or "").rstrip()
         user_template_agent1 = str(prompt_cfg.get("user_template_agent1") or user_template).rstrip()
         user_template_agent2 = str(prompt_cfg.get("user_template_agent2") or user_template).rstrip()
+        include_air_rects = bool(prompt_cfg.get("include_air_rects", False))
 
         task_cfg = cfg.get("task") or {}
         if not isinstance(task_cfg, dict):
@@ -420,7 +422,7 @@ def main() -> int:
                     palette={str(k): str(v) for k, v in palette.items()},
                     layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
                 )
-                layers_text = format_layers_text(task, world_from=w_from)
+                layers_text = format_layers_text(task, world_from=w_from, include_air=include_air_rects)
                 legend = legend_lines(task.palette)
 
                 allowed_blocks_agent1 = _allowed_blocks(item, block_agent1_override)
