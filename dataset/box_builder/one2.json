@@ -9,12 +9,12 @@
     "A": "air"
   },
   "count": {
-    "C": 104,
+    "C": 68,
     "O": 12,
     "S": 36,
     "B": 54,
     "D": 2,
-    "A": 86
+    "A": 122
   },
   "target_spec": {
     "type": "y_layers",
@@ -41,9 +41,9 @@
         "rows": [
           "AAAAAA",
           "OCDDCO",
-          "CCCCCC",
-          "CCCCCC",
-          "CCCCCC",
+          "CAAAAC",
+          "CAAAAC",
+          "CAAAAC",
           "OCCCCO",
           "AAAAAA"
         ]
@@ -53,9 +53,9 @@
         "rows": [
           "AAAAAA",
           "OCAACO",
-          "CCCCCC",
-          "CCCCCC",
-          "CCCCCC",
+          "CAAAAC",
+          "CAAAAC",
+          "CAAAAC",
           "OCCCCO",
           "AAAAAA"
         ]
@@ -65,9 +65,9 @@
         "rows": [
           "AAAAAA",
           "OCCCCO",
-          "CCCCCC",
-          "CCCCCC",
-          "CCCCCC",
+          "CAAAAC",
+          "CAAAAC",
+          "CAAAAC",
           "OCCCCO",
           "AAAAAA"
         ]
