@@ -8,6 +8,14 @@
     "D": "planks",
     "A": "air"
   },
+  "count": {
+    "C": 104,
+    "O": 12,
+    "S": 36,
+    "B": 54,
+    "D": 2,
+    "A": 86
+  },
   "target_spec": {
     "type": "y_layers",
     "size": [

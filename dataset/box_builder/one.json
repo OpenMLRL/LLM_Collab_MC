@@ -8,6 +8,14 @@
     "L": "oak_log",
     "D": "sand"
   },
+  "count": {
+    "O": 30,
+    "W": 2,
+    "C": 62,
+    "A": 38,
+    "L": 16,
+    "D": 2
+  },
   "target_spec": {
     "type": "y_layers",
     "size": [
