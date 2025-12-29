@@ -27,6 +27,8 @@ task:
 prompt:
   # Use tokenizer.apply_chat_template when available.
   use_chat_template: true
+  # Turn-1 hint to split rectangles by x2 thresholds.
+  turn1_hint: true
 
 external:
   # Only used when trainer.num_turns > 1.

@@ -40,7 +40,7 @@ from LLM_Collab_MC.box_builder.utils.box_builder import (
 )
 from LLM_Collab_MC.box_builder.utils.config import apply_overrides, expand_jobid_placeholder, load_yaml, resolve_path
 from LLM_Collab_MC.box_builder.utils.patches import apply_default_patches
-from LLM_Collab_MC.box_builder.utils.prompting import apply_prompt_defaults
+from LLM_Collab_MC.box_builder.utils.prompting import apply_prompt_defaults, append_turn1_hint
 from LLM_Collab_MC.box_builder.utils.trainer_args import get_trainer_args
 
 
@@ -166,7 +166,7 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
             return ""
         return "Resource limits per agent (air unlimited):\n" + "\n".join(lines)
 
-    def _render(item: Dict[str, Any], tmpl: str) -> str:
+    def _render(item: Dict[str, Any], tmpl: str, agent_idx: int | None) -> str:
         override = _prompt_override(item)
         if override is not None:
             return override
@@ -204,6 +204,14 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
         resource_limits_text = _format_resource_limits(task)
         if resource_limits_text:
             user = user + "\n\n" + resource_limits_text
+        user = append_turn1_hint(
+            user,
+            item=item,
+            world_from=w_from,
+            agent_idx=agent_idx,
+            num_agents=num_agents,
+            prompt_cfg=prompt_cfg,
+        )
         return _render_prompt(
             tokenizer=tokenizer,
             system_prompt=system_prompt,
@@ -212,11 +220,11 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
         )
 
     if num_agents == 1:
-        return [lambda item: _render(item, user_template)]
+        return [lambda item: _render(item, user_template, None)]
 
     return [
-        lambda item: _render(item, user_template_agent1),
-        lambda item: _render(item, user_template_agent2),
+        lambda item: _render(item, user_template_agent1, 0),
+        lambda item: _render(item, user_template_agent2, 1),
     ]
 
 
@@ -491,6 +499,22 @@ def main() -> int:
                     base_user_single = base_user_single + "\n\n" + resource_limits_text
                     base_user_agent1 = base_user_agent1 + "\n\n" + resource_limits_text
                     base_user_agent2 = base_user_agent2 + "\n\n" + resource_limits_text
+                base_user_agent1 = append_turn1_hint(
+                    base_user_agent1,
+                    item=item,
+                    world_from=w_from,
+                    agent_idx=0,
+                    num_agents=num_agents,
+                    prompt_cfg=prompt_cfg,
+                )
+                base_user_agent2 = append_turn1_hint(
+                    base_user_agent2,
+                    item=item,
+                    world_from=w_from,
+                    agent_idx=1,
+                    num_agents=num_agents,
+                    prompt_cfg=prompt_cfg,
+                )
 
                 payload = {
                     "system_prompt": system_prompt,
