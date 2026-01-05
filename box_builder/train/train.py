@@ -600,6 +600,7 @@ def main() -> int:
                     "max_commands_total": max_commands_total,
                     "limited_resource": limited_resource,
                     "resource_limits_text": resource_limits_text,
+                    "rpg_state": cfg.get("_rpg_state"),
                 }
 
                 ds_key = _normalize_key(str(item.get("prompt") or ""))

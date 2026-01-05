@@ -17,6 +17,7 @@ from . import position_feedback
 from . import position_modification
 from . import rect_modification
 from . import resource_schedule
+from . import score_feedback
 
 
 # Verbose toggle for external previews
@@ -160,6 +161,25 @@ def get_external_transition(
         if VERBOSE:
             print("\n" + "=" * 60)
             print("EXTERNAL MODE PREVIEW: resource_schedule")
+            for i, p in enumerate(prompts):
+                print("-" * 60)
+                print(f"AGENT {i} PROMPT:\n{p}")
+            print("=" * 60 + "\n")
+        return prompts
+    if mode_key in ("score_feedback", "score-feedback", "score"):
+        prompts = score_feedback.format_followup_prompts(
+            ctx=ctx,
+            agent_completions=list(agent_completions),
+            num_agents=n,
+            original_prompt_flag=original_prompt_flag,
+            previous_response_flag=previous_response_flag,
+            prompt_history_per_agent=prompt_history_per_agent,
+            response_history_per_agent=response_history_per_agent,
+        )
+        prompts = [common_prompt.apply_common_prompt(p, prefix=common_prefix, suffix=common_suffix) for p in prompts]
+        if VERBOSE:
+            print("\n" + "=" * 60)
+            print("EXTERNAL MODE PREVIEW: score_feedback")
             for i, p in enumerate(prompts):
                 print("-" * 60)
                 print(f"AGENT {i} PROMPT:\n{p}")
