@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, List, Mapping
 
 from LLM_Collab_MC.box_builder.utils.box_builder import (
     TaskSpec,
-    build_expected_map,
     compute_resource_limits,
     extract_command_lines,
     normalize_block_id,
@@ -16,38 +15,20 @@ from LLM_Collab_MC.box_builder.utils.box_builder import (
 )
 
 
-def _log_train_iou(iou: float, *, turn_idx: int | None) -> None:
+def _log_train_metrics(metrics: Mapping[str, float], *, turn_idx: int | None) -> None:
     try:
         import wandb  # type: ignore
 
         run = getattr(wandb, "run", None)
         if run is None:
             return
-        key = f"turn_{int(turn_idx)}/iou" if turn_idx else "turn_1/iou"
-        wandb.log({key: float(iou)}, commit=False)
+        prefix = f"turn_{int(turn_idx)}" if turn_idx else "turn_1"
+        payload = {f"{prefix}/{k}": float(v) for k, v in metrics.items()}
+        wandb.log(payload, commit=False)
     except Exception:
         return
 
 
-def _is_air(block_id: str) -> bool:
-    return normalize_block_id(block_id) in ("air", "cave_air", "void_air")
-
-
-def _compute_iou(task: TaskSpec, blocks: List[Mapping[str, Any]]) -> float:
-    expected_map = build_expected_map(task)
-    expected_non_air = {pos for pos, block in expected_map.items() if not _is_air(block)}
-    observed_non_air = {
-        (int(b.get("pos")[0]), int(b.get("pos")[1]), int(b.get("pos")[2]))
-        for b in blocks
-        if isinstance(b.get("pos"), list)
-        and len(b.get("pos")) == 3
-        and not _is_air(b.get("name") or "air")
-    }
-    union = expected_non_air | observed_non_air
-    if not union:
-        return 0.0
-    intersection = expected_non_air & observed_non_air
-    return float(len(intersection) / len(union))
 
 
 def _as_int(x: Any, default: int) -> int:
@@ -254,7 +235,15 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             )
             metrics = score_box_builder(task=task, world_scan_blocks=blocks)
             reward = float(metrics.get("score_mean", 0.0))
-            _log_train_iou(_compute_iou(task, blocks), turn_idx=turn_idx)
+            _log_train_metrics(
+                {
+                    "iou": float(metrics.get("iou", 0.0)),
+                    "level_1": float(metrics.get("score_match", 0.0)),
+                    "level_2": 0.0,
+                    "level_total": reward,
+                },
+                turn_idx=turn_idx,
+            )
             if debug_enabled:
                 _maybe_debug_print(
                     task=task,
@@ -332,11 +321,20 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         )
         metrics = score_box_builder(task=task, world_scan_blocks=blocks)
         reward = float(metrics.get("score_mean", 0.0))
-        _log_train_iou(_compute_iou(task, blocks), turn_idx=turn_idx)
-
+        spider_penalty = 0.0
         if spider_dmg_for_penalty > 0 and player_hp_for_penalty > 0:
             if not _has_kill(accepted_1) and not _has_kill(accepted_2):
-                reward -= min(1.0, spider_dmg_for_penalty / player_hp_for_penalty) * 0.1
+                spider_penalty = min(1.0, spider_dmg_for_penalty / player_hp_for_penalty) * 0.1
+        reward -= spider_penalty
+        _log_train_metrics(
+            {
+                "iou": float(metrics.get("iou", 0.0)),
+                "level_1": float(metrics.get("score_match", 0.0)),
+                "level_2": -float(spider_penalty),
+                "level_total": reward,
+            },
+            turn_idx=turn_idx,
+        )
 
         if debug_enabled:
             _maybe_debug_print(

@@ -463,12 +463,26 @@ def score_box_builder(*, task: TaskSpec, world_scan_blocks: List[Dict[str, Any]]
             continue
         observed[(int(pos[0]), int(pos[1]), int(pos[2]))] = normalize_block_id(str(name)) if name is not None else "air"
 
+    def _is_air(block_id: str) -> bool:
+        return normalize_block_id(block_id) in ("air", "cave_air", "void_air")
+
     correct = 0
     total = 0
+    expected_non_air = 0
+    intersection = 0
     for pos, expected in expected_map.items():
         total += 1
-        if observed.get(pos, "air") == expected:
+        obs = observed.get(pos, "air")
+        if obs == expected:
             correct += 1
+        if not _is_air(expected):
+            expected_non_air += 1
+            if not _is_air(obs):
+                intersection += 1
+
+    observed_non_air = sum(1 for v in observed.values() if not _is_air(v))
+    union = expected_non_air + observed_non_air - intersection
+    iou = (intersection / union) if union > 0 else 0.0
 
     score_match = (correct / total) if total else 0.0
     return {
@@ -476,6 +490,7 @@ def score_box_builder(*, task: TaskSpec, world_scan_blocks: List[Dict[str, Any]]
         "match_total": total,
         "score_match": score_match,
         "score_mean": score_match,
+        "iou": iou,
     }
 
 
