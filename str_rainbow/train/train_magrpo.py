@@ -5,7 +5,6 @@ import json
 import os
 import sys
 import time
-from functools import partial
 from typing import Any, Dict, List, Tuple
 
 try:
@@ -27,10 +26,6 @@ from comlrl.utils.reward_processor import RewardProcessors  # type: ignore
 from LLM_Collab_MC.str_rainbow.external import (
     get_external_transition as external_get_transition,
     set_context_resolver as external_set_context_resolver,
-)
-from LLM_Collab_MC.str_rainbow.loggers.mt_str_rainbow_logger import (
-    aggregate_mt_str_rainbow_metrics,
-    mt_str_rainbow_logger,
 )
 from LLM_Collab_MC.str_rainbow.rewards.str_rainbow_reward import get_reward_function
 from LLM_Collab_MC.str_rainbow.utils.config import apply_overrides, load_yaml, resolve_path
@@ -242,7 +237,6 @@ def main() -> int:
     train_items, eval_items = _split_list(items, split_ratio=split_ratio, seed=seed)
     train_ds = Dataset.from_list(train_items)
     eval_ds = Dataset.from_list(eval_items) if eval_items else None
-    tasks_by_prompt = {f"str_rainbow:{t.task_id}": t for t in tasks}
 
     model_cfg = cfg.get("model") or {}
     if not isinstance(model_cfg, dict):
@@ -284,13 +278,6 @@ def main() -> int:
     magrpo_args = get_trainer_args(cfg)
     formatters = _build_formatters(cfg, num_agents=num_agents, tokenizer=tokenizer)
     reward_func = get_reward_function(cfg=cfg, num_agents=num_agents)
-    eval_logger = partial(
-        mt_str_rainbow_logger,
-        cfg=cfg,
-        num_agents=num_agents,
-        tasks_by_prompt=tasks_by_prompt,
-    )
-    eval_aggregator = aggregate_mt_str_rainbow_metrics
 
     reward_processor = None
     rp_cfg = cfg.get("reward_processor") or {}
@@ -367,8 +354,6 @@ def main() -> int:
         "tokenizer": tokenizer,
         "wandb_config": wandb_config,
         "dataset_type": str(dataset_cfg.get("type") or "str_rainbow"),
-        "eval_logger": eval_logger,
-        "eval_aggregator": eval_aggregator,
     }
     if reward_processor is not None:
         trainer_kwargs["reward_processor"] = reward_processor

@@ -14,6 +14,29 @@ from LLM_Collab_MC.str_rainbow.utils.str_rainbow import (
 )
 
 
+def _log_train_iou(iou: float, *, turn_idx: int | None) -> None:
+    try:
+        import wandb  # type: ignore
+
+        run = getattr(wandb, "run", None)
+        if run is None:
+            return
+        key = f"train/turn_{int(turn_idx)}/iou" if turn_idx else "train/iou"
+        wandb.log({key: float(iou)}, commit=False)
+    except Exception:
+        return
+
+
+def _compute_iou(metrics: Mapping[str, Any]) -> float:
+    covered = float(metrics.get("covered", 0.0))
+    extra = float(metrics.get("extra_blocks", 0.0))
+    target_total = float(metrics.get("target_total", 0.0))
+    union = target_total + extra
+    if union <= 0:
+        return 0.0
+    return covered / union
+
+
 def _as_int(x: Any, default: int) -> int:
     try:
         return int(x)
@@ -178,6 +201,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
                 allowed_blocks_per_agent=allowed_blocks_per_agent,
             )
             reward = float(metrics.get("score_mean", 0.0))
+            _log_train_iou(_compute_iou(metrics), turn_idx=turn_idx)
             if debug_enabled:
                 obs_map = {tuple(b["pos"]): normalize_block_id(b.get("name") or "air") for b in blocks}
                 _maybe_debug_print(
@@ -247,6 +271,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
             allowed_blocks_per_agent=allowed_blocks_per_agent,
         )
         reward = float(metrics.get("score_mean", 0.0))
+        _log_train_iou(_compute_iou(metrics), turn_idx=turn_idx)
         if debug_enabled:
             obs_map = {tuple(b["pos"]): normalize_block_id(b.get("name") or "air") for b in blocks}
             _maybe_debug_print(

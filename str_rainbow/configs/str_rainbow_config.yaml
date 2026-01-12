@@ -38,9 +38,9 @@ magrpo:
   per_device_train_batch_size: 1
   rollout_buffer_size: 2
   learning_rate: 5e-6
-  eval_interval: 10
-  eval_num_samples: 4
-  num_generations: 2
+  eval_interval: 0
+  eval_num_samples: 0
+  num_generations: 4
   max_new_tokens: 512
   temperature: 0.6
   top_p: 0.95
@@ -49,7 +49,7 @@ magrpo:
   num_agents: 2
   discount: 0.9
   termination_threshold: 0.0
-  logging_steps: 20
+  logging_steps: 8
   save_steps: 200
   normalize_advantage: false
   epsilon_clip: null
