@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 from typing import Any, Dict
 
@@ -24,13 +25,24 @@ def apply_overrides(cfg: Dict[str, Any], override: str) -> Dict[str, Any]:
         if not k:
             continue
 
+        if k == "wandb.run_name":
+            k = "wandb.name"
+
         if v.lower() in ("true", "false"):
             vv: Any = v.lower() == "true"
+        elif v.lower() in ("none", "null"):
+            vv = None
         else:
             try:
-                vv = int(v) if v.isdigit() else float(v)
+                vv = ast.literal_eval(v)
             except Exception:
-                vv = v
+                try:
+                    vv = int(v)
+                except Exception:
+                    try:
+                        vv = float(v)
+                    except Exception:
+                        vv = v
 
         cur: Dict[str, Any] = cfg
         parts = k.split(".")
@@ -56,5 +68,4 @@ def resolve_path(config_path: str, maybe_rel: Any) -> str:
         return str(path.resolve())
     base = Path(config_path).expanduser().resolve().parent
     return str((base / path).resolve())
-
 
