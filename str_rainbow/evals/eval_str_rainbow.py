@@ -38,6 +38,7 @@ for p in (REPO_PARENT, REPO_ROOT):
 
 from LLM_Collab_MC.str_rainbow.evals.eval_common import (
     as_block_list,
+    build_command_limits,
     build_context_resolver,
     combine_commands,
     compute_iou,
