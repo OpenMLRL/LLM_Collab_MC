@@ -66,7 +66,7 @@ def main() -> int:
         if override_items:
             cfg = apply_overrides(cfg, ",".join(override_items))
 
-    evaluate_str_rainbow(cfg, args)
+    evaluate_str_rainbow(cfg, args, run_label="parallel")
     return 0
 
 

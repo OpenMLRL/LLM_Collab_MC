@@ -53,7 +53,7 @@ from LLM_Collab_MC.str_rainbow.utils.prompting import apply_prompt_defaults
 from LLM_Collab_MC.str_rainbow.utils.str_rainbow import TaskSpec, load_tasks_from_csv
 
 
-def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[str, Any]:
+def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, run_label: str = "eval") -> Dict[str, Any]:
     """Run evaluation and return summary dict."""
     apply_prompt_defaults(cfg)
 
@@ -296,7 +296,8 @@ def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Di
     os.makedirs(output_base_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    results_csv_path = os.path.join(output_base_dir, f"str_rainbow_eval_{timestamp}.csv")
+    label_safe = str(run_label or "eval").strip().lower().replace(" ", "_")
+    results_csv_path = os.path.join(output_base_dir, f"str_rainbow_{label_safe}_{timestamp}.csv")
     with open(results_csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(all_results[0].keys()))
         writer.writeheader()
@@ -304,7 +305,7 @@ def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Di
     print(f"\nCSV saved to: {results_csv_path}")
 
     summary = {
-        "config": "str_rainbow_eval",
+        "config": label_safe,
         "model": model_name,
         "num_agents": num_agents,
         "num_turns": num_turns,
@@ -324,7 +325,7 @@ def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Di
         "timestamp": timestamp,
         "aggregated": aggregated,
     }
-    json_path = os.path.join(output_base_dir, f"str_rainbow_eval_summary_{timestamp}.json")
+    json_path = os.path.join(output_base_dir, f"str_rainbow_{label_safe}_summary_{timestamp}.json")
     with open(json_path, "w") as f:
         json.dump(summary, f, indent=2)
     print(f"JSON summary saved to: {json_path}")
