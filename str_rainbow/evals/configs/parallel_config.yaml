@@ -1,0 +1,44 @@
+# str_rainbow evaluation - Parallel (2 agents, 1 turn, no feedback)
+
+model:
+  name: "Qwen/Qwen3-4B-Instruct-2507"
+  type: "qwen"
+  tokenizer_kwargs:
+    trust_remote_code: true
+  model_kwargs:
+    trust_remote_code: true
+    device_map: auto
+    low_cpu_mem_usage: true
+    attn_implementation: sdpa
+  dtype: "bf16"
+  temperature: 0.6
+  top_p: 0.6
+
+dataset:
+  name: "str_rainbow"
+  type: "str_rainbow"
+  csv_path: "../../../dataset/str_builder/data.csv"
+  eval_split: "[:32]"
+  spacing: 2
+  local_z: 0
+
+evaluation:
+  num_agents: 2
+  num_turns: 1
+  num_samples: 1          # attempts per task
+  max_new_tokens: 512
+  temperature: 0.6
+  top_p: 0.6
+
+task:
+  block_agent1: [black_concrete, green_concrete]
+  block_agent2: [white_concrete, red_concrete]
+  max_commands: 300
+
+prompt:
+  provide_graph: false
+  use_chat_template: true
+
+output:
+  base_dir: "evals/results"
+  verbose: true

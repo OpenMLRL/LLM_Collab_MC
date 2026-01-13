@@ -1,0 +1,3 @@
+# Slurm outputs from eval runs
+slurm-*
+evals/results
