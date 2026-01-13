@@ -114,6 +114,7 @@ def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, ru
     allowed_blocks_per_agent = [allowed_blocks_agent1]
     if num_agents >= 2:
         allowed_blocks_per_agent.append(allowed_blocks_agent2 if allowed_blocks_agent2 else allowed_blocks_agent1)
+    command_limits = build_command_limits(num_agents, max_commands_total)
 
     external_cfg = cfg.get("external") or {}
     if not isinstance(external_cfg, dict):
@@ -121,6 +122,7 @@ def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, ru
     external_mode = str(external_cfg.get("mode") or "position_feedback")
     external_original_prompt = bool(external_cfg.get("original_prompt", True))
     external_previous_response = bool(external_cfg.get("previous_response", False))
+    external_enabled = bool(external_cfg.get("enabled", False))
 
     output_cfg = cfg.get("output") or {}
     if not isinstance(output_cfg, dict):
@@ -170,6 +172,7 @@ def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, ru
 
             # Initial prompts
             current_prompts = [fmt(task_item_dict) if callable(fmt) else "" for fmt in formatters]
+            base_prompts = list(current_prompts)
 
             for turn_idx in range(num_turns):
                 turn_completions: List[str] = []
@@ -197,18 +200,37 @@ def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, ru
                 times_per_turn.append(turn_times)
 
                 if turn_idx < num_turns - 1:
-                    current_prompts = list(
-                        get_external_transition(
-                            prompt=task_prompt_key,
-                            agent_completions=turn_completions,
-                            num_agents=num_agents,
-                            mode=external_mode,
-                            original_prompt=external_original_prompt,
-                            previous_response=external_previous_response,
-                            prompt_history_per_agent=prompt_history,
-                            response_history_per_agent=response_history,
+                    if external_enabled:
+                        current_prompts = list(
+                            get_external_transition(
+                                prompt=task_prompt_key,
+                                agent_completions=turn_completions,
+                                num_agents=num_agents,
+                                mode=external_mode,
+                                original_prompt=external_original_prompt,
+                                previous_response=external_previous_response,
+                                prompt_history_per_agent=prompt_history,
+                                response_history_per_agent=response_history,
+                            )
                         )
-                    )
+                    else:
+                        def _refine_prompt(base: str, prior: List[str], agent_idx: int) -> str:
+                            prior_text = "\n".join(
+                                f"--- Agent {i+1} previous commands ---\n{(p or '').strip()}"
+                                for i, p in enumerate(prior)
+                                if (p or "").strip()
+                            )
+                            guidance = (
+                                "\n\nRefine your /setblock commands to better match the target."
+                                " You may overwrite earlier commands."
+                                f" Max commands allowed: {command_limits[agent_idx]}."
+                                "\nOutput ONLY Minecraft commands, one per line (no markdown)."
+                            )
+                            return f"{base.rstrip()}\n\n{prior_text}{guidance}".strip()
+
+                        current_prompts = [
+                            _refine_prompt(base_prompts[idx], turn_completions, idx) for idx in range(num_agents)
+                        ]
 
             # Normalize commands and score
             merged_commands, accepted_counts = combine_commands(

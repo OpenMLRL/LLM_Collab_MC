@@ -24,7 +24,7 @@ dataset:
 
 evaluation:
   num_agents: 2
-  num_turns: 3           # matches training default
+  num_turns: 2           # Code_Generation-style discussion (Turn1 + Turn2 refine)
   num_samples: 1
   max_new_tokens: 512
   temperature: 0.6
@@ -38,11 +38,6 @@ task:
 prompt:
   provide_graph: false
   use_chat_template: true
-
-external:
-  mode: position_feedback   # or perfect_feedback
-  original_prompt: true
-  previous_response: false
 
 output:
   base_dir: "evals/results"
