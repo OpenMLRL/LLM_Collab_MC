@@ -1,0 +1,42 @@
+# box_builder evaluation - Parallel (2 agents, 1 turn, no feedback)
+
+model:
+  name: "Qwen/Qwen2.5-3B-Instruct"
+  type: "qwen"
+  tokenizer_kwargs:
+    trust_remote_code: true
+  model_kwargs:
+    trust_remote_code: true
+    device_map: auto
+    low_cpu_mem_usage: true
+    attn_implementation: sdpa
+  dtype: "bf16"
+  temperature: 0.618
+  top_p: 0.6
+
+dataset:
+  name: "box_builder"
+  type: "box_builder"
+  json_path: "../../../dataset/box_builder/one2.json"
+  eval_split: "[:16]"
+
+evaluation:
+  num_agents: 2
+  num_turns: 1
+  num_samples: 1
+  max_new_tokens: 512
+  temperature: 0.618
+  top_p: 0.6
+
+task:
+  block_agent1: []
+  block_agent2: []
+  max_commands: 600
+  limited_resource: true
+
+prompt:
+  use_chat_template: true
+
+output:
+  base_dir: "evals/results"
+  verbose: true
