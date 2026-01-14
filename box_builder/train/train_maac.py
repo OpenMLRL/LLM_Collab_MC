@@ -409,6 +409,12 @@ def main() -> int:
     formatters = _build_formatters(cfg, num_agents=num_agents, tokenizer=tokenizer)
     prompt_to_item: Dict[str, Dict[str, Any]] = {}
     dataset_prompt_map: Dict[str, Dict[str, Any]] = {}
+    layers_key_map: Dict[str, Dict[str, Any]] = {}
+
+    prompt_cfg = cfg.get("prompt") or {}
+    if not isinstance(prompt_cfg, dict):
+        prompt_cfg = {}
+    include_air_rects = bool(prompt_cfg.get("include_air_rects", False))
 
     def _normalize_key(s: str) -> str:
         return " ".join((s or "").split()).strip()
@@ -426,6 +432,9 @@ def main() -> int:
             ds_key = _normalize_key(str(item.get("prompt") or ""))
             if ds_key and ds_key not in dataset_prompt_map:
                 dataset_prompt_map[ds_key] = dict(item)
+            layers_key = _layers_key_from_item(item)
+            if layers_key and layers_key not in layers_key_map:
+                layers_key_map[layers_key] = dict(item)
             for fmt in formatters:
                 try:
                     prompt = fmt(item)
@@ -438,11 +447,60 @@ def main() -> int:
     if eval_items:
         _register_dataset_prompts(eval_items, 1)
 
+    _layers_re = re.compile(
+        r"Layers \\(ascending WORLD y\\).*?\\n- Format:.*?\\n(.*?)\\n\\s*WORLD bbox \\(inclusive\\):",
+        re.DOTALL,
+    )
+
+    def _layers_key_from_item(item: Mapping[str, Any]) -> str:
+        w_from = item.get("local_bbox_from") or [0, 0, 0]
+        w_to = item.get("local_bbox_to") or [0, 0, 0]
+        palette = item.get("palette") or {}
+        layers_by_y = item.get("layers_by_y") or {}
+        try:
+            task = TaskSpec(
+                task_id=str(item.get("task_id") or ""),
+                local_bbox_from=[int(v) for v in w_from],
+                local_bbox_to=[int(v) for v in w_to],
+                palette={str(k): str(v) for k, v in palette.items()},
+                layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
+            )
+            layers_text = format_layers_text(task, world_from=w_from, include_air=include_air_rects)
+        except Exception:
+            return ""
+        return _normalize_key(layers_text)
+
+    def _extract_layers_key(prompt: str) -> str:
+        if not prompt:
+            return ""
+        match = _layers_re.search(prompt)
+        if not match:
+            return ""
+        return _normalize_key(match.group(1))
+
+    def _extract_turn_idx(prompt: str) -> int | None:
+        if not prompt:
+            return None
+        match = re.search(r"\\bTurn\\s*:\\s*(\\d+)\\b", prompt)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except Exception:
+            return None
+
     def _lookup_item(prompts: List[str]) -> Dict[str, Any]:
         for p in prompts or []:
             key = _normalize_key(p)
             if key in prompt_to_item:
                 return prompt_to_item[key]
+            layers_key = _extract_layers_key(p)
+            if layers_key and layers_key in layers_key_map:
+                item = dict(layers_key_map[layers_key])
+                turn_idx = _extract_turn_idx(p)
+                if turn_idx is not None:
+                    item["_box_builder_turn"] = int(turn_idx)
+                return item
         return {}
 
     reward_base = get_reward_function(cfg=cfg, num_agents=num_agents)
