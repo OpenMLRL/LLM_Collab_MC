@@ -312,7 +312,7 @@ def main() -> int:
     parser.add_argument(
         "--config",
         type=str,
-        default=os.path.join(REPO_ROOT, "box_builder", "configs", "box_builder_config.yaml"),
+        default=os.path.join(REPO_ROOT, "box_builder", "configs", "box_builder_magrpo_config.yaml"),
         help="Path to YAML config",
     )
     parser.add_argument(

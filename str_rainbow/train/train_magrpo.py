@@ -183,7 +183,7 @@ def main() -> int:
     parser.add_argument(
         "--config",
         type=str,
-        default=os.path.join(REPO_ROOT, "str_rainbow", "configs", "str_rainbow_config.yaml"),
+        default=os.path.join(REPO_ROOT, "str_rainbow", "configs", "str_rainbow_magrpo_config.yaml"),
         help="Path to YAML config",
     )
     parser.add_argument(
