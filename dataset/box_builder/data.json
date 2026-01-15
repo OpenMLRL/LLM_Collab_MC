@@ -135,8 +135,8 @@
       "A": "air"
     },
     "count": {
-      "C": 74,
-      "O": 6,
+      "C": 68,
+      "O": 12,
       "S": 12,
       "B": 114,
       "D": 2,
@@ -166,7 +166,7 @@
           "y": 1,
           "rows": [
             "AAAAAA",
-            "CCDDCC",
+            "OCDDCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -178,7 +178,7 @@
           "y": 2,
           "rows": [
             "AAAAAA",
-            "CCAACC",
+            "OCAACO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -190,7 +190,7 @@
           "y": 3,
           "rows": [
             "AAAAAA",
-            "CCCCCC",
+            "OCCCCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -250,8 +250,8 @@
       "A": "air"
     },
     "count": {
-      "C": 74,
-      "O": 6,
+      "C": 68,
+      "O": 12,
       "S": 12,
       "B": 114,
       "D": 2,
@@ -285,7 +285,7 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -297,7 +297,7 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -309,7 +309,7 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -365,8 +365,8 @@
       "A": "air"
     },
     "count": {
-      "C": 80,
-      "O": 0,
+      "C": 68,
+      "O": 12,
       "S": 12,
       "B": 114,
       "D": 2,
@@ -396,11 +396,11 @@
           "y": 1,
           "rows": [
             "AAAAAA",
-            "CCDDCC",
+            "OCDDCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -408,11 +408,11 @@
           "y": 2,
           "rows": [
             "AAAAAA",
-            "CCAACC",
+            "OCAACO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -420,11 +420,11 @@
           "y": 3,
           "rows": [
             "AAAAAA",
-            "CCCCCC",
+            "OCCCCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -480,8 +480,8 @@
       "A": "air"
     },
     "count": {
-      "C": 74,
-      "O": 6,
+      "C": 68,
+      "O": 12,
       "S": 24,
       "B": 42,
       "D": 2,
@@ -511,7 +511,7 @@
           "y": 1,
           "rows": [
             "AAAAAA",
-            "CCDDCC",
+            "OCDDCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -523,7 +523,7 @@
           "y": 2,
           "rows": [
             "AAAAAA",
-            "CCAACC",
+            "OCAACO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -535,7 +535,7 @@
           "y": 3,
           "rows": [
             "AAAAAA",
-            "CCCCCC",
+            "OCCCCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -595,8 +595,8 @@
       "A": "air"
     },
     "count": {
-      "C": 74,
-      "O": 6,
+      "C": 68,
+      "O": 12,
       "S": 24,
       "B": 42,
       "D": 2,
@@ -630,7 +630,7 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -642,7 +642,7 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -654,7 +654,7 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -710,10 +710,10 @@
       "A": "air"
     },
     "count": {
-      "C": 74,
-      "O": 6,
-      "S": 56,
-      "B": 56,
+      "C": 68,
+      "O": 12,
+      "S": 54,
+      "B": 58,
       "D": 2,
       "A": 100
     },
@@ -741,7 +741,7 @@
           "y": 1,
           "rows": [
             "AAAAAA",
-            "CCDDCC",
+            "OCDDCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -753,7 +753,7 @@
           "y": 2,
           "rows": [
             "AAAAAA",
-            "CCAACC",
+            "OCAACO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -765,7 +765,7 @@
           "y": 3,
           "rows": [
             "AAAAAA",
-            "CCCCCC",
+            "OCCCCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -776,13 +776,13 @@
         {
           "y": 4,
           "rows": [
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS"
+            "SSSSSS",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "SSSSSS"
           ]
         },
         {
@@ -825,10 +825,10 @@
       "A": "air"
     },
     "count": {
-      "C": 74,
-      "O": 6,
-      "S": 56,
-      "B": 56,
+      "C": 68,
+      "O": 12,
+      "S": 54,
+      "B": 58,
       "D": 2,
       "A": 100
     },
@@ -860,7 +860,7 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -872,7 +872,7 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -884,20 +884,20 @@
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
         {
           "y": 4,
           "rows": [
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS"
+            "SSSSSS",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "SSSSSS"
           ]
         },
         {
@@ -940,10 +940,10 @@
       "A": "air"
     },
     "count": {
-      "C": 80,
-      "O": 0,
-      "S": 40,
-      "B": 28,
+      "C": 68,
+      "O": 12,
+      "S": 30,
+      "B": 38,
       "D": 2,
       "A": 144
     },
@@ -971,11 +971,11 @@
           "y": 1,
           "rows": [
             "AAAAAA",
-            "CCDDCC",
+            "OCDDCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -983,11 +983,11 @@
           "y": 2,
           "rows": [
             "AAAAAA",
-            "CCAACC",
+            "OCAACO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -995,11 +995,11 @@
           "y": 3,
           "rows": [
             "AAAAAA",
-            "CCCCCC",
+            "OCCCCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
-            "CCCCCC",
+            "OCCCCO",
             "AAAAAA"
           ]
         },
@@ -1007,11 +1007,11 @@
           "y": 4,
           "rows": [
             "SSSSSS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
             "SSSSSS"
           ]
         },
@@ -1055,10 +1055,10 @@
       "A": "air"
     },
     "count": {
-      "C": 74,
-      "O": 6,
-      "S": 40,
-      "B": 28,
+      "C": 68,
+      "O": 12,
+      "S": 30,
+      "B": 38,
       "D": 2,
       "A": 144
     },
@@ -1086,7 +1086,7 @@
           "y": 1,
           "rows": [
             "AAAAAA",
-            "CCDDCC",
+            "OCDDCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -1098,7 +1098,7 @@
           "y": 2,
           "rows": [
             "AAAAAA",
-            "CCAACC",
+            "OCAACO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -1110,7 +1110,7 @@
           "y": 3,
           "rows": [
             "AAAAAA",
-            "CCCCCC",
+            "OCCCCO",
             "CAAAAC",
             "CAAAAC",
             "CAAAAC",
@@ -1122,11 +1122,11 @@
           "y": 4,
           "rows": [
             "SSSSSS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
-            "SBBBBS",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
+            "BBBBBB",
             "SSSSSS"
           ]
         },
