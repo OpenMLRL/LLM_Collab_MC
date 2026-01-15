@@ -20,10 +20,12 @@ import csv
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from statistics import mean
 from typing import Any, Dict, List
 
+import torch  # type: ignore
 from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -94,6 +96,7 @@ def evaluate_box_builder(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, ru
     max_new_tokens = int(getattr(args_ns, "max_new_tokens", None) or eval_cfg.get("max_new_tokens") or magrpo_cfg.get("max_new_tokens") or 256)
     temperature = float(getattr(args_ns, "temperature", None) or eval_cfg.get("temperature") or model_cfg.get("temperature") or 0.6)
     top_p = float(getattr(args_ns, "top_p", None) or eval_cfg.get("top_p") or model_cfg.get("top_p") or 0.6)
+    base_seed = int(getattr(args_ns, "seed", None) or time.time())
 
     task_cfg = cfg.get("task") or {}
     if not isinstance(task_cfg, dict):
@@ -140,6 +143,7 @@ def evaluate_box_builder(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, ru
         for attempt in range(num_samples):
             if verbose:
                 print(f"  Attempt {attempt+1}/{num_samples}")
+            attempt_seed = base_seed + attempt
 
             prompt_history: List[List[str]] = [[] for _ in range(num_agents)]
             response_history: List[List[str]] = [[] for _ in range(num_agents)]
@@ -164,6 +168,7 @@ def evaluate_box_builder(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, ru
                         max_new_tokens=max_new_tokens,
                         temperature=temperature,
                         top_p=top_p,
+                        seed=attempt_seed * 100 + turn_idx * 10 + agent_idx,
                     )
                     turn_completions.append(completion)
                     turn_tokens.append(tok_count)
@@ -328,6 +333,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-p", type=float, default=None, help="Top-p sampling.")
     parser.add_argument("--output-dir", type=str, default=None, help="Where to store results.")
     parser.add_argument("--verbose", action="store_true", default=None, help="Verbose logging.")
+    parser.add_argument("--seed", type=int, default=None, help="Base seed for sampling (different per attempt).")
     parser.add_argument(
         "--override",
         type=str,

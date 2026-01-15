@@ -11,10 +11,12 @@ import csv
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from statistics import mean
 from typing import Any, Dict, List
 
+import torch  # type: ignore
 from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -69,6 +71,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-p", type=float, default=None, help="Top-p sampling.")
     parser.add_argument("--output-dir", type=str, default=None, help="Where to store results.")
     parser.add_argument("--verbose", action="store_true", default=None, help="Verbose logging.")
+    parser.add_argument("--seed", type=int, default=None, help="Base seed for sampling (different per attempt).")
     parser.add_argument(
         "--override",
         type=str,
@@ -118,6 +121,7 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
     max_new_tokens = int(args_ns.max_new_tokens or eval_cfg.get("max_new_tokens") or 512)
     temperature = float(args_ns.temperature or eval_cfg.get("temperature") or model_cfg.get("temperature") or 0.6)
     top_p = float(args_ns.top_p or eval_cfg.get("top_p") or model_cfg.get("top_p") or 0.6)
+    base_seed = int(getattr(args_ns, "seed", None) or time.time())
 
     # Task config
     task_cfg = cfg.get("task") or {}
@@ -165,6 +169,7 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
         for attempt in range(num_samples):
             if verbose:
                 print(f"  Attempt {attempt+1}/{num_samples}")
+            attempt_seed = base_seed + attempt
 
             # Agent 1
             c1, t1, tok1 = generate_completion(
@@ -174,6 +179,7 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 top_p=top_p,
+                seed=attempt_seed * 100,
             )
 
             # Agent 2 sees Agent 1 output
@@ -185,6 +191,7 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 top_p=top_p,
+                seed=attempt_seed * 100 + 1,
             )
 
             completions_per_turn = [

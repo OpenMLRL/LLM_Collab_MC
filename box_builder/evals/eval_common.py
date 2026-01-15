@@ -45,11 +45,17 @@ def generate_completion(
     max_new_tokens: int,
     temperature: float,
     top_p: float,
+    seed: int | None = None,
 ) -> Tuple[str, float, int]:
     """Generate one completion and return text, wall time, and new-token count."""
     device = model.device
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True).to(device)
     prompt_len = inputs.input_ids.shape[1]
+
+    if seed is not None:
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
     start = time.perf_counter()
     with torch.no_grad():

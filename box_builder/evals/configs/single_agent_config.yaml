@@ -23,7 +23,7 @@ dataset:
 evaluation:
   num_agents: 1
   num_turns: 1
-  num_samples: 1
+  num_samples: 5
   max_new_tokens: 512
   temperature: 0.618
   top_p: 0.6
