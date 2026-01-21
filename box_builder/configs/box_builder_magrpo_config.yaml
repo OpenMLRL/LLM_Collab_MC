@@ -14,12 +14,10 @@ model:
   gradient_checkpointing: false
 
 dataset:
-  name: str_rainbow
-  type: str_rainbow
-  csv_path: ../../dataset/str_builder/data.csv
+  name: box_builder
+  type: box_builder
+  json_path: ../../dataset/box_builder/data.json
   train_split: "[:]"
-  spacing: 2
-  local_z: 0
 
 output:
   base_dir: output
@@ -28,19 +26,22 @@ output:
   verbose: false
 
 external:
-  mode: position_feedback
+  mode: score_feedback
   original_prompt: true
-  previous_response: false
+  previous_response: true
+  lim: 20
+  common_prefix: null
+  common_suffix: Do not output any text other than commands.
 
 magrpo:
-  num_turns: 3
+  num_turns: 4
   num_train_epochs: 20
   per_device_train_batch_size: 1
   rollout_buffer_size: 1
-  learning_rate: 5e-6
+  learning_rate: 1e-5
   eval_interval: 0
   eval_num_samples: 0
-  num_generations: 3
+  num_generations: 2
   max_new_tokens: 512
   temperature: 0.6
   top_p: 0.6
@@ -49,7 +50,7 @@ magrpo:
   num_agents: 2
   discount: 0.9
   termination_threshold: -0.1
-  logging_steps: 1
+  logging_steps: 5
   save_steps: 200
   normalize_advantage: false
   epsilon_clip: null
@@ -57,28 +58,36 @@ magrpo:
 reward_processor:
   enabled: true
   scale_factor: 1.0
-  shift: -2.0
+  shift: -1.0
 
 wandb:
-  project: str_rainbow
+  project: box_builder
   entity: OpenMLRL
-  run_name: str_rainbow_magrpo
+  run_name: box_builder_magrpo
   dir: output
-  tags: ["magrpo", "str_rainbow"]
+  tags: ["magrpo", "box_builder"]
 
 prompt:
-  provide_graph: false
   use_chat_template: true
 
 task:
-  block_agent1: [black_concrete, green_concrete]
-  block_agent2: [white_concrete, red_concrete]
-  max_commands: 300
+  block_agent1: []
+  block_agent2: []
+  max_commands: 600
+  limited_resource: true
+
+RPG:
+  player:
+    hp: 5
+  spider:
+    num: 3
+    atk_low: 1
+    atk_high: 3
 
 debug:
   enabled: true
-  max_prints: 1000
-  every_n_calls: 5
+  max_prints: 2000
+  every_n_calls: 11
   empty_char: "."
   raw_output: true
 

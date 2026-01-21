@@ -7,7 +7,7 @@ import random
 import re
 import sys
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 try:
     import yaml  # type: ignore
@@ -19,10 +19,10 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, os.path.dirname(REPO_ROOT))
 
 from datasets import Dataset  # type: ignore
-from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+from transformers import AutoTokenizer  # type: ignore
 import torch  # type: ignore
 
-from comlrl.trainers.magrpo import MAGRPOTrainer  # type: ignore
+from comlrl.trainers.iac import IACTrainer  # type: ignore
 from comlrl.utils.reward_processor import RewardProcessors  # type: ignore
 
 from LLM_Collab_MC.box_builder.external import (
@@ -42,7 +42,7 @@ from LLM_Collab_MC.box_builder.utils.box_builder import (
 from LLM_Collab_MC.box_builder.utils.config import apply_overrides, load_yaml, resolve_path
 from LLM_Collab_MC.box_builder.utils.patches import apply_default_patches
 from LLM_Collab_MC.box_builder.utils.prompting import apply_prompt_defaults
-from LLM_Collab_MC.box_builder.utils.trainer_args import get_trainer_args
+from LLM_Collab_MC.box_builder.utils.trainer_args import get_iac_args
 
 
 def _slice_items(items: List[Dict[str, Any]], split_expr: Any) -> List[Dict[str, Any]]:
@@ -308,11 +308,11 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Train box_builder with GRPO (CoMLRL MAGRPOTrainer)")
+    parser = argparse.ArgumentParser(description="Train box_builder with IAC (CoMLRL IACTrainer)")
     parser.add_argument(
         "--config",
         type=str,
-        default=os.path.join(REPO_ROOT, "box_builder", "configs", "box_builder_magrpo_config.yaml"),
+        default=os.path.join(REPO_ROOT, "box_builder", "configs", "box_builder_iac_config.yaml"),
         help="Path to YAML config",
     )
     parser.add_argument(
@@ -351,12 +351,12 @@ def main() -> int:
 
     _prepare_rpg_state(cfg, seed)
 
-    magrpo_cfg = cfg.get("magrpo") or {}
-    if not isinstance(magrpo_cfg, dict):
-        magrpo_cfg = {}
-    num_agents = int(magrpo_cfg.get("num_agents") or 1)
+    iac_cfg = cfg.get("iac") or {}
+    if not isinstance(iac_cfg, dict):
+        iac_cfg = {}
+    num_agents = int(iac_cfg.get("num_agents") or 1)
     if num_agents not in (1, 2):
-        raise ValueError("magrpo.num_agents must be 1 or 2")
+        raise ValueError("iac.num_agents must be 1 or 2")
 
     dataset_cfg = cfg.get("dataset") or {}
     if not isinstance(dataset_cfg, dict):
@@ -405,25 +405,120 @@ def main() -> int:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    agents = []
-    for _ in range(num_agents):
-        agent = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
-        enable_gc = bool(model_cfg.get("gradient_checkpointing", False))
-        if enable_gc:
-            try:
-                if hasattr(agent, "config"):
-                    agent.config.use_cache = False
-            except Exception:
-                pass
-            try:
-                agent.gradient_checkpointing_enable()
-            except Exception:
-                pass
-        agents.append(agent)
-
-    magrpo_args = get_trainer_args(cfg)
+    iac_args = get_iac_args(cfg, model_name=model_name)
     formatters = _build_formatters(cfg, num_agents=num_agents, tokenizer=tokenizer)
-    reward_func = get_reward_function(cfg=cfg, num_agents=num_agents)
+    prompt_to_item: Dict[str, Dict[str, Any]] = {}
+    dataset_prompt_map: Dict[str, Dict[str, Any]] = {}
+    layers_key_map: Dict[str, Dict[str, Any]] = {}
+
+    prompt_cfg = cfg.get("prompt") or {}
+    if not isinstance(prompt_cfg, dict):
+        prompt_cfg = {}
+    include_air_rects = bool(prompt_cfg.get("include_air_rects", False))
+
+    def _normalize_key(s: str) -> str:
+        return " ".join((s or "").split()).strip()
+
+    def _register_prompt(prompt: str, item: Mapping[str, Any], turn_idx: int) -> None:
+        key = _normalize_key(prompt)
+        if not key:
+            return
+        mapped = dict(item)
+        mapped["_box_builder_turn"] = int(turn_idx)
+        prompt_to_item[key] = mapped
+
+    _layers_re = re.compile(
+        r"Layers \(ascending WORLD y\).*?\n- Format:.*?\n(.*?)\n\s*WORLD bbox \(inclusive\):",
+        re.DOTALL,
+    )
+
+    def _layers_key_from_item(item: Mapping[str, Any]) -> str:
+        w_from = item.get("local_bbox_from") or [0, 0, 0]
+        w_to = item.get("local_bbox_to") or [0, 0, 0]
+        palette = item.get("palette") or {}
+        layers_by_y = item.get("layers_by_y") or {}
+        try:
+            task = TaskSpec(
+                task_id=str(item.get("task_id") or ""),
+                local_bbox_from=[int(v) for v in w_from],
+                local_bbox_to=[int(v) for v in w_to],
+                palette={str(k): str(v) for k, v in palette.items()},
+                layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
+            )
+            layers_text = format_layers_text(task, world_from=w_from, include_air=include_air_rects)
+        except Exception:
+            return ""
+        return _normalize_key(layers_text)
+
+    def _extract_layers_key(prompt: str) -> str:
+        if not prompt:
+            return ""
+        match = _layers_re.search(prompt)
+        if not match:
+            return ""
+        return _normalize_key(match.group(1))
+
+    def _extract_turn_idx(prompt: str) -> int | None:
+        if not prompt:
+            return None
+        match = re.search(r"\bTurn\s*:\s*(\d+)\b", prompt)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except Exception:
+            return None
+
+    def _register_dataset_prompts(items_list: List[Dict[str, Any]], turn_idx: int) -> None:
+        for item in items_list:
+            ds_key = _normalize_key(str(item.get("prompt") or ""))
+            if ds_key and ds_key not in dataset_prompt_map:
+                dataset_prompt_map[ds_key] = dict(item)
+            layers_key = _layers_key_from_item(item)
+            if layers_key and layers_key not in layers_key_map:
+                layers_key_map[layers_key] = dict(item)
+            for fmt in formatters:
+                try:
+                    prompt = fmt(item)
+                except Exception:
+                    prompt = ""
+                if prompt:
+                    _register_prompt(prompt, item, turn_idx)
+
+    _register_dataset_prompts(train_items, 1)
+    if eval_items:
+        _register_dataset_prompts(eval_items, 1)
+
+    def _lookup_item(prompts: List[str]) -> Dict[str, Any]:
+        for p in prompts or []:
+            key = _normalize_key(p)
+            if key in prompt_to_item:
+                return prompt_to_item[key]
+            layers_key = _extract_layers_key(p)
+            if layers_key and layers_key in layers_key_map:
+                item = dict(layers_key_map[layers_key])
+                turn_idx = _extract_turn_idx(p)
+                if turn_idx is not None:
+                    item["_box_builder_turn"] = int(turn_idx)
+                return item
+        return {}
+
+    reward_base = get_reward_function(cfg=cfg, num_agents=num_agents)
+    if num_agents == 1:
+
+        def reward_func(prompts: List[str], agent1_completions: List[str]) -> List[float]:
+            batch_item = _lookup_item(prompts)
+            return reward_base(agent1_completions, batch_items=[batch_item])
+
+    else:
+
+        def reward_func(
+            prompts: List[str],
+            agent1_completions: List[str],
+            agent2_completions: List[str],
+        ) -> List[float]:
+            batch_item = _lookup_item(prompts)
+            return reward_base(agent1_completions, agent2_completions, batch_items=[batch_item])
 
     reward_processor = None
     rp_cfg = cfg.get("reward_processor") or {}
@@ -455,17 +550,17 @@ def main() -> int:
         if dir_val:
             dir_val = str(dir_val)
         try:
-            num_turns_val = int(getattr(magrpo_args, "num_turns", 1))
+            num_turns_val = int(getattr(iac_args, "num_turns", 1))
         except Exception:
             num_turns_val = 1
         dataset_type = str(dataset_cfg.get("type") or "box_builder")
         tags = wandb_cfg.get(
             "tags",
-            ["magrpo", dataset_type, f"agents_{num_agents}", f"turns_{num_turns_val}"],
+            ["iac", dataset_type, f"agents_{num_agents}", f"turns_{num_turns_val}"],
         )
         if not isinstance(tags, list):
-            tags = ["magrpo", dataset_type, f"agents_{num_agents}", f"turns_{num_turns_val}"]
-        run_name = wandb_cfg.get("run_name") or "box_builder_magrpo"
+            tags = ["iac", dataset_type, f"agents_{num_agents}", f"turns_{num_turns_val}"]
+        run_name = wandb_cfg.get("run_name") or "box_builder_iac"
         wandb_config = {
             "project": wandb_cfg.get("project", "box_builder"),
             "entity": wandb_cfg.get("entity", None),
@@ -477,7 +572,7 @@ def main() -> int:
                 "model": model_cfg,
                 "output": output_cfg,
                 "external": external_cfg,
-                "trainer": magrpo_cfg,
+                "trainer": iac_cfg,
             },
         }
         if wandb_config.get("dir"):
@@ -494,29 +589,31 @@ def main() -> int:
 
     is_multi_turn = False
     try:
-        is_multi_turn = int(getattr(magrpo_args, "num_turns", 1)) > 1
+        is_multi_turn = int(getattr(iac_args, "num_turns", 1)) > 1
     except Exception:
         is_multi_turn = False
 
     trainer_kwargs: Dict[str, Any] = {
-        "agents": agents,
-        "num_agents": num_agents,
+        "model": model_name,
+        "tokenizer": tokenizer,
         "reward_func": reward_func,
         "formatters": formatters,
-        "args": magrpo_args,
+        "args": iac_args,
         "train_dataset": train_ds,
         "eval_dataset": eval_ds,
-        "tokenizer": tokenizer,
+        "model_config": {
+            "tokenizer_kwargs": tokenizer_kwargs,
+            "model_kwargs": model_kwargs,
+            "critic_model_kwargs": iac_cfg.get("critic_model_kwargs", model_kwargs),
+            "critic_value_head_hidden_dim": iac_cfg.get("critic_value_head_hidden_dim"),
+            "value_head_hidden_dim": iac_cfg.get("value_head_hidden_dim"),
+        },
         "wandb_config": wandb_config,
-        "dataset_type": str(dataset_cfg.get("type") or "box_builder"),
     }
     if reward_processor is not None:
         trainer_kwargs["reward_processor"] = reward_processor
 
     if is_multi_turn:
-        def _normalize_key(s: str) -> str:
-            return " ".join((s or "").split()).strip()
-
         prompt_cfg = cfg.get("prompt") or {}
         if not isinstance(prompt_cfg, dict):
             prompt_cfg = {}
@@ -678,7 +775,9 @@ def main() -> int:
 
         def external_transition_wrapper(prompt: str, agent_completions: Any, num_agents: int | None = None, **_kwargs: Any) -> Any:
             n_agents = int(num_agents) if num_agents is not None else num_agents_default
-            return external_get_transition(
+            prompt_history = _kwargs.get("prompt_history_per_agent")
+            response_history = _kwargs.get("response_history_per_agent")
+            prompts = external_get_transition(
                 prompt=prompt,
                 agent_completions=agent_completions,
                 num_agents=n_agents,
@@ -688,13 +787,23 @@ def main() -> int:
                 previous_response=previous_response_flag,
                 common_prefix=common_prefix,
                 common_suffix=common_suffix,
-                prompt_history_per_agent=_kwargs.get("prompt_history_per_agent"),
-                response_history_per_agent=_kwargs.get("response_history_per_agent"),
+                prompt_history_per_agent=prompt_history,
+                response_history_per_agent=response_history,
             )
+            try:
+                turn_idx = int(len(prompt_history[0]) + 1) if prompt_history else 2
+            except Exception:
+                turn_idx = 2
+            item_key = _normalize_key(str(prompt or ""))
+            item = dataset_prompt_map.get(item_key)
+            if item and isinstance(prompts, (list, tuple)):
+                for p in prompts:
+                    _register_prompt(str(p), item, turn_idx)
+            return prompts
 
         trainer_kwargs["external_transition"] = external_transition_wrapper
 
-    trainer = MAGRPOTrainer(**trainer_kwargs)
+    trainer = IACTrainer(**trainer_kwargs)
     try:
         trainer.verbose = bool(output_verbose)
     except Exception:
@@ -706,7 +815,7 @@ def main() -> int:
         if save_path_cfg:
             save_path = str(save_path_cfg)
         else:
-            save_path = os.path.join(os.path.abspath(magrpo_args.output_dir), "final_model")
+            save_path = os.path.join(os.path.abspath(iac_args.output_dir), "final_model")
         trainer.save_model(save_path)
         print(f"Model saved to: {save_path}")
 

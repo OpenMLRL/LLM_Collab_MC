@@ -6,7 +6,7 @@ import os
 import re
 import sys
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 try:
     import yaml  # type: ignore
@@ -18,10 +18,10 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, os.path.dirname(REPO_ROOT))
 
 from datasets import Dataset  # type: ignore
-from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+from transformers import AutoTokenizer  # type: ignore
 import torch  # type: ignore
 
-from comlrl.trainers.magrpo import MAGRPOTrainer  # type: ignore
+from comlrl.trainers.maac import MAACTrainer  # type: ignore
 from comlrl.utils.reward_processor import RewardProcessors  # type: ignore
 
 from LLM_Collab_MC.str_rainbow.external import (
@@ -33,7 +33,7 @@ from LLM_Collab_MC.str_rainbow.utils.config import apply_overrides, load_yaml, r
 from LLM_Collab_MC.str_rainbow.utils.patches import apply_default_patches
 from LLM_Collab_MC.str_rainbow.utils.prompting import apply_graph_setting, apply_prompt_defaults
 from LLM_Collab_MC.str_rainbow.utils.str_rainbow import load_tasks_from_csv
-from LLM_Collab_MC.str_rainbow.utils.trainer_args import get_trainer_args
+from LLM_Collab_MC.str_rainbow.utils.trainer_args import get_maac_args
 
 
 def _slice_items(items: List[Dict[str, Any]], split_expr: Any) -> List[Dict[str, Any]]:
@@ -179,11 +179,11 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Train str_rainbow with GRPO (CoMLRL MAGRPOTrainer num_agents=1)")
+    parser = argparse.ArgumentParser(description="Train str_rainbow with MAAC (CoMLRL MAACTrainer)")
     parser.add_argument(
         "--config",
         type=str,
-        default=os.path.join(REPO_ROOT, "str_rainbow", "configs", "str_rainbow_magrpo_config.yaml"),
+        default=os.path.join(REPO_ROOT, "str_rainbow", "configs", "str_rainbow_maac_config.yaml"),
         help="Path to YAML config",
     )
     parser.add_argument(
@@ -220,12 +220,12 @@ def main() -> int:
     else:
         seed = int(seed_val)
 
-    magrpo_cfg = cfg.get("magrpo") or {}
-    if not isinstance(magrpo_cfg, dict):
-        magrpo_cfg = {}
-    num_agents = int(magrpo_cfg.get("num_agents") or 1)
+    maac_cfg = cfg.get("maac") or {}
+    if not isinstance(maac_cfg, dict):
+        maac_cfg = {}
+    num_agents = int(maac_cfg.get("num_agents") or 1)
     if num_agents not in (1, 2):
-        raise ValueError("magrpo.num_agents must be 1 or 2")
+        raise ValueError("maac.num_agents must be 1 or 2")
 
     dataset_cfg = cfg.get("dataset") or {}
     if not isinstance(dataset_cfg, dict):
@@ -278,25 +278,62 @@ def main() -> int:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    agents = []
-    for _ in range(num_agents):
-        agent = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
-        enable_gc = bool(model_cfg.get("gradient_checkpointing", True))
-        if enable_gc:
-            try:
-                if hasattr(agent, "config"):
-                    agent.config.use_cache = False
-            except Exception:
-                pass
-            try:
-                agent.gradient_checkpointing_enable()
-            except Exception:
-                pass
-        agents.append(agent)
-
-    magrpo_args = get_trainer_args(cfg)
+    maac_args = get_maac_args(cfg, model_name=model_name)
     formatters = _build_formatters(cfg, num_agents=num_agents, tokenizer=tokenizer)
-    reward_func = get_reward_function(cfg=cfg, num_agents=num_agents)
+    prompt_to_item: Dict[str, Dict[str, Any]] = {}
+    dataset_prompt_map: Dict[str, Dict[str, Any]] = {}
+
+    def _normalize_key(s: str) -> str:
+        return " ".join((s or "").split()).strip()
+
+    def _register_prompt(prompt: str, item: Mapping[str, Any], turn_idx: int) -> None:
+        key = _normalize_key(prompt)
+        if not key:
+            return
+        mapped = dict(item)
+        mapped["_str_rainbow_turn"] = int(turn_idx)
+        prompt_to_item[key] = mapped
+
+    def _register_dataset_prompts(items_list: List[Dict[str, Any]], turn_idx: int) -> None:
+        for item in items_list:
+            ds_key = _normalize_key(str(item.get("prompt") or ""))
+            if ds_key and ds_key not in dataset_prompt_map:
+                dataset_prompt_map[ds_key] = dict(item)
+            for fmt in formatters:
+                try:
+                    prompt = fmt(item)
+                except Exception:
+                    prompt = ""
+                if prompt:
+                    _register_prompt(prompt, item, turn_idx)
+
+    _register_dataset_prompts(train_items, 1)
+    if eval_items:
+        _register_dataset_prompts(eval_items, 1)
+
+    def _lookup_item(prompts: List[str]) -> Dict[str, Any]:
+        for p in prompts or []:
+            key = _normalize_key(p)
+            if key in prompt_to_item:
+                return prompt_to_item[key]
+        return {}
+
+    reward_base = get_reward_function(cfg=cfg, num_agents=num_agents)
+    if num_agents == 1:
+
+        def reward_func(prompts: List[str], agent1_completions: List[str]) -> List[float]:
+            batch_item = _lookup_item(prompts)
+            return reward_base(agent1_completions, batch_items=[batch_item])
+
+    else:
+
+        def reward_func(
+            prompts: List[str],
+            agent1_completions: List[str],
+            agent2_completions: List[str],
+        ) -> List[float]:
+            batch_item = _lookup_item(prompts)
+            return reward_base(agent1_completions, agent2_completions, batch_items=[batch_item])
 
     reward_processor = None
     rp_cfg = cfg.get("reward_processor") or {}
@@ -329,16 +366,16 @@ def main() -> int:
             dir_val = str(dir_val)
         dataset_type = str(dataset_cfg.get("type") or "str_rainbow")
         try:
-            num_turns_val = int(getattr(magrpo_args, "num_turns", 1))
+            num_turns_val = int(getattr(maac_args, "num_turns", 1))
         except Exception:
             num_turns_val = 1
         tags = wandb_cfg.get(
             "tags",
-            ["magrpo", dataset_type, f"agents_{num_agents}", f"turns_{num_turns_val}"],
+            ["maac", dataset_type, f"agents_{num_agents}", f"turns_{num_turns_val}"],
         )
         if not isinstance(tags, list):
-            tags = ["magrpo", dataset_type, f"agents_{num_agents}", f"turns_{num_turns_val}"]
-        run_name = wandb_cfg.get("run_name") or "str_rainbow_magrpo"
+            tags = ["maac", dataset_type, f"agents_{num_agents}", f"turns_{num_turns_val}"]
+        run_name = wandb_cfg.get("run_name") or "str_rainbow_maac"
         wandb_config = {
             "project": wandb_cfg.get("project", "str_rainbow"),
             "entity": wandb_cfg.get("entity", None),
@@ -350,7 +387,7 @@ def main() -> int:
                 "model": model_cfg,
                 "output": output_cfg,
                 "external": external_cfg,
-                "trainer": magrpo_cfg,
+                "trainer": maac_cfg,
             },
         }
         if wandb_config.get("dir"):
@@ -367,29 +404,30 @@ def main() -> int:
 
     is_multi_turn = False
     try:
-        is_multi_turn = int(getattr(magrpo_args, "num_turns", 1)) > 1
+        is_multi_turn = int(getattr(maac_args, "num_turns", 1)) > 1
     except Exception:
         is_multi_turn = False
 
     trainer_kwargs: Dict[str, Any] = {
-        "agents": agents,
-        "num_agents": num_agents,
+        "model": model_name,
+        "tokenizer": tokenizer,
         "reward_func": reward_func,
         "formatters": formatters,
-        "args": magrpo_args,
+        "args": maac_args,
         "train_dataset": train_ds,
         "eval_dataset": eval_ds,
-        "tokenizer": tokenizer,
+        "model_config": {
+            "tokenizer_kwargs": tokenizer_kwargs,
+            "model_kwargs": model_kwargs,
+            "critic_model_kwargs": maac_cfg.get("critic_model_kwargs", model_kwargs),
+            "critic_value_head_hidden_dim": maac_cfg.get("critic_value_head_hidden_dim"),
+        },
         "wandb_config": wandb_config,
-        "dataset_type": str(dataset_cfg.get("type") or "str_rainbow"),
     }
     if reward_processor is not None:
         trainer_kwargs["reward_processor"] = reward_processor
 
     if is_multi_turn:
-        def _normalize_key(s: str) -> str:
-            return " ".join((s or "").split()).strip()
-
         prompt_cfg = cfg.get("prompt") or {}
         if not isinstance(prompt_cfg, dict):
             prompt_cfg = {}
@@ -506,20 +544,32 @@ def main() -> int:
 
         def external_transition_wrapper(prompt: str, agent_completions: Any, num_agents: int | None = None, **_kwargs: Any) -> Any:
             n_agents = int(num_agents) if num_agents is not None else num_agents_default
-            return external_get_transition(
+            prompt_history = _kwargs.get("prompt_history_per_agent")
+            response_history = _kwargs.get("response_history_per_agent")
+            prompts = external_get_transition(
                 prompt=prompt,
                 agent_completions=agent_completions,
                 num_agents=n_agents,
                 mode=external_mode,
                 original_prompt=original_prompt_flag,
                 previous_response=previous_response_flag,
-                prompt_history_per_agent=_kwargs.get("prompt_history_per_agent"),
-                response_history_per_agent=_kwargs.get("response_history_per_agent"),
+                prompt_history_per_agent=prompt_history,
+                response_history_per_agent=response_history,
             )
+            try:
+                turn_idx = int(len(prompt_history[0]) + 1) if prompt_history else 2
+            except Exception:
+                turn_idx = 2
+            item_key = _normalize_key(str(prompt or ""))
+            item = dataset_prompt_map.get(item_key)
+            if item and isinstance(prompts, (list, tuple)):
+                for p in prompts:
+                    _register_prompt(str(p), item, turn_idx)
+            return prompts
 
         trainer_kwargs["external_transition"] = external_transition_wrapper
 
-    trainer = MAGRPOTrainer(**trainer_kwargs)
+    trainer = MAACTrainer(**trainer_kwargs)
     try:
         trainer.verbose = bool(output_verbose)
     except Exception:
@@ -531,7 +581,7 @@ def main() -> int:
         if save_path_cfg:
             save_path = str(save_path_cfg)
         else:
-            save_path = os.path.join(os.path.abspath(magrpo_args.output_dir), "final_model")
+            save_path = os.path.join(os.path.abspath(maac_args.output_dir), "final_model")
         trainer.save_model(save_path)
         print(f"Model saved to: {save_path}")
 
