@@ -47,6 +47,7 @@ from LLM_Collab_MC.str_rainbow.evals.eval_common import (
     simulate_and_score,
     task_to_item_dict,
 )
+from LLM_Collab_MC.str_rainbow.evals.constants import DEFAULT_MODEL, resolve_model_name
 from LLM_Collab_MC.str_rainbow.external import get_external_transition, set_context_resolver
 from LLM_Collab_MC.str_rainbow.train.train_magrpo import _build_formatters, _map_dtype, _slice_items
 from LLM_Collab_MC.str_rainbow.utils.config import apply_overrides, load_yaml, resolve_path
@@ -76,7 +77,8 @@ def evaluate_str_rainbow(cfg: Dict[str, Any], args_ns: argparse.Namespace, *, ru
     model_cfg = cfg.get("model") or {}
     if not isinstance(model_cfg, dict):
         model_cfg = {}
-    model_name = args_ns.model_name or model_cfg.get("name") or ""
+    model_name_raw = args_ns.model_name or model_cfg.get("name") or DEFAULT_MODEL
+    model_name = resolve_model_name(model_name_raw)
     if not model_name:
         raise ValueError("model.name is required")
     tokenizer_kwargs = model_cfg.get("tokenizer_kwargs") or {}
@@ -378,7 +380,14 @@ def parse_args() -> argparse.Namespace:
         default=os.path.join(PROJECT_DIR, "evals", "configs", "str_rainbow_eval.yaml"),
         help="Path to YAML config file.",
     )
-    parser.add_argument("--model-name", type=str, default=None, help="HF model name (overrides config).")
+    parser.add_argument(
+        "--model-name",
+        "--model",
+        dest="model_name",
+        type=str,
+        default=None,
+        help="HF model name or alias (overrides config, see constants.py).",
+    )
     parser.add_argument("--csv-path", type=str, default=None, help="Dataset CSV path (overrides config).")
     parser.add_argument("--eval-split", type=str, default=None, help="Slice expression, e.g., '[:32]'.")
     parser.add_argument("--num-turns", type=int, default=None, help="Number of turns (overrides config).")

@@ -19,6 +19,7 @@ for p in (REPO_PARENT, REPO_ROOT):
         sys.path.insert(0, p)
 
 from LLM_Collab_MC.str_rainbow.evals.eval_str_rainbow import evaluate_str_rainbow
+from LLM_Collab_MC.str_rainbow.evals.constants import resolve_model_name
 from LLM_Collab_MC.str_rainbow.utils.config import apply_overrides, load_yaml
 
 
@@ -30,7 +31,14 @@ def parse_args() -> argparse.Namespace:
         default=os.path.join(PROJECT_DIR, "evals", "configs", "single_agent_config.yaml"),
         help="Path to YAML config file.",
     )
-    parser.add_argument("--model-name", type=str, default=None, help="HF model name (overrides config).")
+    parser.add_argument(
+        "--model-name",
+        "--model",
+        dest="model_name",
+        type=str,
+        default=None,
+        help="HF model name or alias (overrides config, see constants.py).",
+    )
     parser.add_argument("--csv-path", type=str, default=None, help="Dataset CSV path (overrides config).")
     parser.add_argument("--eval-split", type=str, default=None, help="Slice expression, e.g., '[:32]'.")
     parser.add_argument("--num-turns", type=int, default=None, help="Number of turns (overrides config).")
@@ -65,6 +73,9 @@ def main() -> int:
                     override_items.append(part)
         if override_items:
             cfg = apply_overrides(cfg, ",".join(override_items))
+
+    # Resolve model aliases early so downstream logic gets the HF path.
+    args.model_name = resolve_model_name(args.model_name)
 
     evaluate_str_rainbow(cfg, args, run_label="single_agent")
     return 0
