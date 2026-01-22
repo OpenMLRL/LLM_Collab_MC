@@ -1,3 +1,5 @@
 # Slurm outputs from eval runs
 slurm-*
 evals/results
+# Local SLURM wrappers
+scripts/train_str_rainbow_*_sbatch.sh
