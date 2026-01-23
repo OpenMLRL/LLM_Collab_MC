@@ -46,7 +46,7 @@ ac:
   top_p: 0.6
   top_k: null
   num_agents: 1
-  use_separate_critic: true
+  use_separate_critic: false
   critic_model: null
   discount: 0.9
   early_termination_threshold: -0.1
