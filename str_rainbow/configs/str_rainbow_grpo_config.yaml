@@ -1,5 +1,5 @@
 model:
-  name: Qwen/Qwen3-4B-Instruct-2507
+  name: Qwen/Qwen2.5-7B-Instruct
   type: qwen
   temperature: 0.6
   top_p: 0.6
@@ -33,7 +33,7 @@ external:
   previous_response: true
 
 grpo:
-  num_turns: 4
+  num_turns: 1
   num_train_epochs: 20
   per_device_train_batch_size: 1
   rollout_buffer_size: 1
