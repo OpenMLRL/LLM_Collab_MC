@@ -1,5 +1,5 @@
 model:
-  name: Qwen/Qwen3-4B-Instruct-2507
+  name: Qwen/Qwen2.5-7B-Instruct
   type: qwen
   temperature: 0.6
   top_p: 0.6
