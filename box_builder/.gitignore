@@ -1,3 +1,5 @@
 # Slurm outputs and eval artifacts
 slurm-*
 evals/results/
+# Local SLURM wrappers
+scripts/train_box_builder_*_sbatch.sh
