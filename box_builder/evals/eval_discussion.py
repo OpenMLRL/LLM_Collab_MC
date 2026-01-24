@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Discussion evaluation for box_builder (2 agents, 2 turns, cross-visibility refine).
+Discussion evaluation for box_builder (configurable num_agents/num_turns, cross-visibility refine).
 """
 
 from __future__ import annotations
@@ -32,6 +32,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-name", type=str, default=None, help="HF model name (overrides config).")
     parser.add_argument("--json-path", type=str, default=None, help="Dataset JSON path (overrides config).")
     parser.add_argument("--eval-split", type=str, default=None, help="Slice expression, e.g., '[:32]'.")
+    parser.add_argument("--num-turns", type=int, default=None, help="Number of turns (overrides config).")
+    parser.add_argument("--num-agents", type=int, default=None, help="Number of agents (overrides config).")
     parser.add_argument("--num-samples", type=int, default=None, help="Attempts per task (overrides config).")
     parser.add_argument("--max-new-tokens", type=int, default=None, help="Max new tokens per generation.")
     parser.add_argument("--temperature", type=float, default=None, help="Sampling temperature.")

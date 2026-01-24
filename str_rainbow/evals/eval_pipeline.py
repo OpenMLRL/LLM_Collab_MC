@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Pipeline evaluation for str_rainbow (Agent 1 then Agent 2 sees Agent 1 commands).
-Sequential time (sum), IoU metric, no multi-turn feedback.
+Sequential time (sum), IoU metric, configurable num_turns (agents alternate, each sees prior commands).
 """
 
 from __future__ import annotations
@@ -39,18 +39,19 @@ from LLM_Collab_MC.str_rainbow.utils.prompting import apply_prompt_defaults
 from LLM_Collab_MC.str_rainbow.utils.str_rainbow import TaskSpec, load_tasks_from_csv
 
 
-def _pipeline_prompt_agent2(base_prompt: str, agent1_output: str, max_commands: int) -> str:
-    agent1_output = (agent1_output or "").strip()
-    extra = ""
-    if agent1_output:
-        extra = (
-            "\n\nAgent 1 commands already placed (do not repeat unless fixing):\n"
-            f"{agent1_output}\n"
+def _format_followup_prompt(base_prompt: str, prior_commands: List[str], max_commands: int) -> str:
+    """Append prior commands so the next agent/turn can refine."""
+    prior_lines = "\n".join(cmd.strip() for cmd in prior_commands if (cmd or "").strip())
+    if prior_lines:
+        return (
+            f"{base_prompt.rstrip()}\n\n"
+            "Commands already placed (do not repeat unless fixing):\n"
+            f"{prior_lines}\n"
             "\nContinue with your /setblock commands to complete the target. "
             f"Max commands allowed: {max_commands}\n"
             "Output ONLY Minecraft commands, one per line (no markdown)."
         )
-    return f"{base_prompt.rstrip()}{extra}"
+    return base_prompt.rstrip()
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,6 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--csv-path", type=str, default=None, help="Dataset CSV path (overrides config).")
     parser.add_argument("--eval-split", type=str, default=None, help="Slice expression, e.g., '[:32]'.")
     parser.add_argument("--num-samples", type=int, default=None, help="Attempts per task (overrides config).")
+    parser.add_argument("--num-turns", type=int, default=None, help="Number of turns (overrides config).")
     parser.add_argument("--max-new-tokens", type=int, default=None, help="Max new tokens per generation.")
     parser.add_argument("--temperature", type=float, default=None, help="Sampling temperature.")
     parser.add_argument("--top-p", type=float, default=None, help="Top-p sampling.")
@@ -118,6 +120,9 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
     if not isinstance(eval_cfg, dict):
         eval_cfg = {}
     num_samples = int(args_ns.num_samples or eval_cfg.get("num_samples") or 1)
+    num_turns = int(args_ns.num_turns or eval_cfg.get("num_turns") or 2)
+    if num_turns < 1:
+        raise ValueError("num_turns must be >= 1 for pipeline evaluation")
     max_new_tokens = int(args_ns.max_new_tokens or eval_cfg.get("max_new_tokens") or 512)
     temperature = float(args_ns.temperature or eval_cfg.get("temperature") or model_cfg.get("temperature") or 0.6)
     top_p = float(args_ns.top_p or eval_cfg.get("top_p") or model_cfg.get("top_p") or 0.6)
@@ -164,36 +169,47 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
 
         base_prompt_agent1 = formatters[0](task_item)
         base_prompt_agent2 = formatters[1](task_item)
+        base_prompts = [base_prompt_agent1, base_prompt_agent2]
 
         for attempt in range(num_samples):
             if verbose:
                 print(f"  Attempt {attempt+1}/{num_samples}")
 
-            # Turn 1: Agent 1
-            c1, t1, tok1 = generate_completion(
-                agent1,
-                tokenizer,
-                base_prompt_agent1,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_p=top_p,
-            )
+            history_commands: List[str] = []
+            completions_per_turn: List[List[str]] = []
+            tokens_per_turn: List[List[int]] = []
+            times_per_turn: List[List[float]] = []
+            current_prompts = list(base_prompts)
 
-            # Turn 2: Agent 2 sees Agent 1 output
-            agent2_prompt = _pipeline_prompt_agent2(base_prompt_agent2, c1, max_commands_total)
-            c2, t2, tok2 = generate_completion(
-                agent2,
-                tokenizer,
-                agent2_prompt,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_p=top_p,
-            )
+            for turn_idx in range(num_turns):
+                agent_idx = turn_idx % 2
+                prompt_text = current_prompts[agent_idx]
+                completion, gen_time, tok_count = generate_completion(
+                    agent1 if agent_idx == 0 else agent2,
+                    tokenizer,
+                    prompt_text,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                )
 
-            completions_per_turn = [
-                [c1, ""],
-                ["", c2],
-            ]
+                turn_completions = ["", ""]
+                turn_tokens = [0, 0]
+                turn_times = [0.0, 0.0]
+                turn_completions[agent_idx] = completion
+                turn_tokens[agent_idx] = tok_count
+                turn_times[agent_idx] = gen_time
+
+                completions_per_turn.append(turn_completions)
+                tokens_per_turn.append(turn_tokens)
+                times_per_turn.append(turn_times)
+                history_commands.append(completion)
+
+                if turn_idx < num_turns - 1:
+                    current_prompts = [
+                        _format_followup_prompt(base_prompts[0], history_commands, max_commands_total),
+                        _format_followup_prompt(base_prompts[1], history_commands, max_commands_total),
+                    ]
 
             merged_commands, accepted_counts = combine_commands(
                 completions_per_turn=completions_per_turn,
@@ -211,13 +227,17 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
             )
             iou = compute_iou(metrics)
 
-            total_time = t1 + t2  # sequential
+            agent_tokens_total = [sum(t[0] for t in tokens_per_turn), sum(t[1] for t in tokens_per_turn)]
+            agent_times_total = [sum(t[0] for t in times_per_turn), sum(t[1] for t in times_per_turn)]
+            turn_times = [max(t) for t in times_per_turn]  # sequential per turn (only one agent active)
+            total_time = sum(turn_times)
             result = {
                 "task_id": task.task_id,
                 "text": task.text,
                 "difficulty": task.difficulty,
                 "attempt_id": attempt,
                 "num_agents": 2,
+                "num_turns": num_turns,
                 "pipeline": True,
                 "iou": round(iou, 4),
                 "coverage_ratio": round(float(metrics.get("coverage_ratio", 0.0)), 4),
@@ -230,12 +250,12 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
                 "missing": int(metrics.get("missing", 0)),
                 "commands_agent1": accepted_counts[0] if accepted_counts else 0,
                 "commands_agent2": accepted_counts[1] if len(accepted_counts) > 1 else 0,
-                "tokens_agent1_total": tok1,
-                "tokens_agent2_total": tok2,
-                "time_agent1_s": round(t1, 4),
-                "time_agent2_s": round(t2, 4),
+                "tokens_agent1_total": agent_tokens_total[0] if agent_tokens_total else 0,
+                "tokens_agent2_total": agent_tokens_total[1] if len(agent_tokens_total) > 1 else 0,
+                "time_agent1_s": round(agent_times_total[0] if agent_times_total else 0.0, 4),
+                "time_agent2_s": round(agent_times_total[1] if len(agent_times_total) > 1 else 0.0, 4),
                 "total_time_s": round(total_time, 4),
-                "total_tokens": tok1 + tok2,
+                "total_tokens": sum(agent_tokens_total),
                 "max_commands_total": max_commands_total,
             }
             all_results.append(result)
@@ -284,7 +304,7 @@ def evaluate_pipeline(cfg: Dict[str, Any], args_ns: argparse.Namespace) -> Dict[
         "config": "str_rainbow_pipeline",
         "model": model_name,
         "num_agents": 2,
-        "num_turns": 2,
+        "num_turns": num_turns,
         "dataset": {
             "csv_path": csv_path,
             "eval_split": eval_split,

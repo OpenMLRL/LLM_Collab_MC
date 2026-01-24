@@ -17,7 +17,7 @@ model:
 dataset:
   name: "box_builder"
   type: "box_builder"
-  json_path: "../../../dataset/box_builder/one2.json"
+  json_path: "../../../dataset/box_builder/data.json"
   eval_split: "[:16]"
 
 evaluation:
