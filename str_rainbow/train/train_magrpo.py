@@ -283,15 +283,9 @@ def main() -> int:
         agent = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
         enable_gc = bool(model_cfg.get("gradient_checkpointing", True))
         if enable_gc:
-            try:
-                if hasattr(agent, "config"):
-                    agent.config.use_cache = False
-            except Exception:
-                pass
-            try:
-                agent.gradient_checkpointing_enable()
-            except Exception:
-                pass
+            if hasattr(agent, "config"):
+                agent.config.use_cache = False
+            agent.gradient_checkpointing_enable()
         agents.append(agent)
 
     magrpo_args = get_trainer_args(cfg)
@@ -356,13 +350,9 @@ def main() -> int:
         if wandb_config.get("dir"):
             os.environ.setdefault("WANDB_DIR", str(wandb_config["dir"]))
 
-    try:
-        import LLM_Collab_MC.str_rainbow.external as external_mod  # type: ignore
+    import LLM_Collab_MC.str_rainbow.external as external_mod  # type: ignore
 
-        external_mod.VERBOSE = bool(output_verbose)
-    except Exception:
-        pass
-
+    external_mod.VERBOSE = bool(output_verbose)
     apply_default_patches(cfg)
 
     is_multi_turn = False
@@ -520,10 +510,7 @@ def main() -> int:
         trainer_kwargs["external_transition"] = external_transition_wrapper
 
     trainer = MAGRPOTrainer(**trainer_kwargs)
-    try:
-        trainer.verbose = bool(output_verbose)
-    except Exception:
-        pass
+    trainer.verbose = bool(output_verbose)
     trainer.train()
 
     if bool(output_cfg.get("save_final_model", False)):
