@@ -24,16 +24,16 @@ import torch  # type: ignore
 from comlrl.trainers.iac import IACTrainer  # type: ignore
 from comlrl.utils.reward_processor import RewardProcessors  # type: ignore
 
-from LLM_Collab_MC.str_builder.external import (
+from LLM_Collab_Minecraft.str_builder.external import (
     get_external_transition as external_get_transition,
     set_context_resolver as external_set_context_resolver,
 )
-from LLM_Collab_MC.str_builder.rewards.str_builder_reward import get_reward_function
-from LLM_Collab_MC.str_builder.utils.config import apply_overrides, load_yaml, resolve_path
-from LLM_Collab_MC.str_builder.utils.patches import apply_default_patches
-from LLM_Collab_MC.str_builder.utils.prompting import apply_graph_setting, apply_prompt_defaults
-from LLM_Collab_MC.str_builder.utils.str_builder import load_tasks_from_csv
-from LLM_Collab_MC.str_builder.utils.trainer_args import get_iac_args
+from LLM_Collab_Minecraft.str_builder.rewards.str_builder_reward import get_reward_function
+from LLM_Collab_Minecraft.str_builder.utils.config import apply_overrides, load_yaml, resolve_path
+from LLM_Collab_Minecraft.str_builder.utils.patches import apply_default_patches
+from LLM_Collab_Minecraft.str_builder.utils.prompting import apply_graph_setting, apply_prompt_defaults
+from LLM_Collab_Minecraft.str_builder.utils.str_builder import load_tasks_from_csv
+from LLM_Collab_Minecraft.str_builder.utils.trainer_args import get_iac_args
 
 
 def _slice_items(items: List[Dict[str, Any]], split_expr: Any) -> List[Dict[str, Any]]:
@@ -398,7 +398,7 @@ def main() -> int:
         if wandb_config.get("dir"):
             os.environ.setdefault("WANDB_DIR", str(wandb_config["dir"]))
 
-    import LLM_Collab_MC.str_builder.external as external_mod  # type: ignore
+    import LLM_Collab_Minecraft.str_builder.external as external_mod  # type: ignore
 
     external_mod.VERBOSE = bool(output_verbose)
     apply_default_patches(cfg)

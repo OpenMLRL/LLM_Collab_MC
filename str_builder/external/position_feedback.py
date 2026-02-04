@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from LLM_Collab_MC.str_builder.utils.str_builder import TaskSpec, get_target_positions
+from LLM_Collab_Minecraft.str_builder.utils.str_builder import TaskSpec, get_target_positions
 
 
 def format_followup_prompts(

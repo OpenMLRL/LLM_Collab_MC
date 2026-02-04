@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from LLM_Collab_MC.str_builder.utils.str_builder import (
+from LLM_Collab_Minecraft.str_builder.utils.str_builder import (
     TaskSpec,
     build_target_color_map,
     extract_command_lines,

@@ -16,7 +16,7 @@ model:
 dataset:
   name: house_builder
   type: house_builder
-  json_path: ../../dataset/house_builder/data.json
+  json_path: ../dataset/data.json
   train_split: "[:]"
 
 output:

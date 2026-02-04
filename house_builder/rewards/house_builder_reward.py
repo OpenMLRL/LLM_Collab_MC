@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable, Dict, List, Mapping
 
-from LLM_Collab_MC.house_builder.utils.house_builder import (
+from LLM_Collab_Minecraft.house_builder.utils.house_builder import (
     TaskSpec,
     compute_resource_limits,
     extract_command_lines,

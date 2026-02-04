@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from LLM_Collab_MC.house_builder.utils.house_builder import (
+from LLM_Collab_Minecraft.house_builder.utils.house_builder import (
     TaskSpec,
     build_expected_map,
     normalize_block_id,

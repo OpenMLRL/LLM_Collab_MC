@@ -16,7 +16,7 @@ model:
 dataset:
   name: str_builder
   type: str_builder
-  csv_path: ../../dataset/str_builder/data.csv
+  csv_path: ../dataset/data.csv
   train_split: "[:]"
   spacing: 2
   local_z: 0
