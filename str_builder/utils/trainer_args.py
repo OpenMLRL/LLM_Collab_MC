@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import inspect
 
-from comlrl.trainers.iac import IACConfig  # type: ignore
-from comlrl.trainers.maac import MAACConfig  # type: ignore
-from comlrl.trainers.magrpo import MAGRPOConfig  # type: ignore
+from comlrl.trainers.actor_critic import IACConfig  # type: ignore
+from comlrl.trainers.actor_critic import MAACConfig  # type: ignore
+from comlrl.trainers.reinforce import MAGRPOConfig  # type: ignore
 
 
 def _as_int(x: Any, default: int) -> int:

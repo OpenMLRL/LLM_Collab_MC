@@ -22,7 +22,7 @@ from datasets import Dataset  # type: ignore
 from transformers import AutoTokenizer  # type: ignore
 import torch  # type: ignore
 
-from comlrl.trainers.iac import IACTrainer  # type: ignore
+from comlrl.trainers.actor_critic import IACTrainer  # type: ignore
 from comlrl.utils.reward_processor import RewardProcessors  # type: ignore
 
 from LLM_Collab_Minecraft.house_builder.external import (
