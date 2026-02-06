@@ -13,6 +13,22 @@ model:
   dtype: bf16
   gradient_checkpointing: false
 
+critic:
+  name: "Qwen/Qwen3-4B-Instruct-2507"
+  type: qwen
+  temperature: 0.6
+  top_p: 0.6
+  max_length: 2048
+  tokenizer_kwargs: {}
+  model_kwargs:
+    trust_remote_code: true
+    device_map: auto
+    low_cpu_mem_usage: true
+    attn_implementation: sdpa
+  dtype: bf16
+  gradient_checkpointing: false
+
+
 dataset:
   name: str_builder
   type: str_builder
@@ -35,9 +51,8 @@ external:
 iac:
   num_agents: 2
   num_turns: 4
-  critic_model: null
   num_train_epochs: 150
-  actor_learning_rate: 2.5e-6
+  agent_learning_rate: 2.5e-6
   critic_learning_rate: 2.5e-6
   value_loss_coef: 0.6
   value_clip_range: 0.05

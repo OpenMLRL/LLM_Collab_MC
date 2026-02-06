@@ -387,6 +387,9 @@ def main() -> int:
     model_cfg = cfg.get("model") or {}
     if not isinstance(model_cfg, dict):
         model_cfg = {}
+    critic_cfg = cfg.get("critic") or {}
+    if not isinstance(critic_cfg, dict):
+        critic_cfg = {}
     model_name = str(model_cfg.get("name") or "")
     if not model_name:
         raise ValueError("model.name is required")
@@ -605,11 +608,17 @@ def main() -> int:
         "model_config": {
             "tokenizer_kwargs": tokenizer_kwargs,
             "model_kwargs": model_kwargs,
-            "critic_model_kwargs": maac_cfg.get("critic_model_kwargs", model_kwargs),
+            "critic_model_kwargs": critic_cfg.get("model_kwargs", {}),
             "critic_value_head_hidden_dim": maac_cfg.get("critic_value_head_hidden_dim"),
         },
         "wandb_config": wandb_config,
     }
+    critic_name = str(critic_cfg.get("name") or "").strip()
+    if not critic_name:
+        raise ValueError("critic.name must be provided for MAAC")
+    critics = [critic_name]
+    if critics is not None:
+        trainer_kwargs["critics"] = critics
     if reward_processor is not None:
         trainer_kwargs["reward_processor"] = reward_processor
 

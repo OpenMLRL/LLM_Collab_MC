@@ -387,6 +387,9 @@ def main() -> int:
     model_cfg = cfg.get("model") or {}
     if not isinstance(model_cfg, dict):
         model_cfg = {}
+    critic_cfg = cfg.get("critic") or {}
+    if not isinstance(critic_cfg, dict):
+        critic_cfg = {}
     model_name = str(model_cfg.get("name") or "")
     if not model_name:
         raise ValueError("model.name is required")
@@ -605,12 +608,21 @@ def main() -> int:
         "model_config": {
             "tokenizer_kwargs": tokenizer_kwargs,
             "model_kwargs": model_kwargs,
-            "critic_model_kwargs": iac_cfg.get("critic_model_kwargs", model_kwargs),
+            "critic_model_kwargs": critic_cfg.get("model_kwargs", {}),
             "critic_value_head_hidden_dim": iac_cfg.get("critic_value_head_hidden_dim"),
             "value_head_hidden_dim": iac_cfg.get("value_head_hidden_dim"),
         },
         "wandb_config": wandb_config,
     }
+    critics = None
+    if bool(getattr(iac_args, "use_separate_critic", True)):
+        critic_name = str(critic_cfg.get("name") or "").strip()
+        if not critic_name:
+            raise ValueError("critic.name must be provided when use_separate_critic is true")
+        num_agents_val = int(getattr(iac_args, "num_agents", 1))
+        critics = [critic_name] * num_agents_val
+    if critics is not None:
+        trainer_kwargs["critics"] = critics
     if reward_processor is not None:
         trainer_kwargs["reward_processor"] = reward_processor
 
