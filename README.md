@@ -38,28 +38,24 @@ Important: `op executor_bot` is a Minecraft server/admin command (not a bash com
 
 `python3 test/test_env.py --host 127.0.0.1 --port 25565 --username executor_bot`
 
-## Baselines (one-shot commands + optional MC eval)
+## Train (str_builder)
 
-- Edit config: `baselines/2d_painting/config.yaml`
-- Edit config: `baselines/str_builder/config.yaml`
-- If `minecraft.enabled=true`, keep a Minecraft server running and OP the bot username (see smoke test steps above).
-- Run locally (writes `.jsonl` by default): `python3 baselines/2d_painting/main.py --config baselines/2d_painting/config.yaml`
-- Run locally (writes `.jsonl` by default): `python3 baselines/str_builder/main.py --config baselines/str_builder/config.yaml`
-- Slurm: copy `baselines/2d_painting/run.example.sh` to `baselines/2d_painting/run.sh` (ignored by git), then `bash baselines/2d_painting/run.sh baselines/2d_painting/config.yaml`
-- Slurm: copy `baselines/str_builder/run.example.sh` to `baselines/str_builder/run.sh` (ignored by git), then `bash baselines/str_builder/run.sh baselines/str_builder/config.yaml`
-- If you need `minecraft.enabled=true` on Slurm: use `baselines/2d_painting/run_sbatch.example.sh` (see `baselines/2d_painting/README.md`)
-- If you need `minecraft.enabled=true` on Slurm: use `baselines/str_builder/run_sbatch.example.sh` (see `baselines/str_builder/README.md`)
+Configs: `str_builder/configs/str_builder_magrpo_config.yaml`, `str_builder/configs/str_builder_iac_config.yaml`, `str_builder/configs/str_builder_maac_config.yaml`.
 
-## Train (str_builder, GRPO)
+Local (requires GPU + `comlrl` env):
+1. `python3 str_builder/train/train_magrpo.py --config str_builder/configs/str_builder_magrpo_config.yaml`
+2. `python3 str_builder/train/train_iac.py --config str_builder/configs/str_builder_iac_config.yaml`
+3. `python3 str_builder/train/train_maac.py --config str_builder/configs/str_builder_maac_config.yaml`
 
-- Config: `str_builder/configs/str_builder_config.yaml`
-- Local (requires GPU + `comlrl` env): `python3 str_builder/train/train.py --config str_builder/configs/str_builder_config.yaml`
-- Slurm: copy `str_builder/scripts/train_str_builder_grpo_sbatch.example.sh` to `str_builder/scripts/train_str_builder_grpo_sbatch.sh` (ignored by git), then run it.
-- Multi-turn: set `trainer.num_turns > 1` (uses `external.mode=draw_feedback` for ASCII target/progress feedback).
+Multi-turn: set `magrpo.num_turns` / `iac.num_turns` / `maac.num_turns` > 1 and choose `external.mode` from `perfect_feedback`, `position_feedback`, or `score_feedback` (see `str_builder/external/__init__.py`).
 
-## Train (str_painter, GRPO)
+## Train (house_builder)
 
-- Config: `str_painter/configs/str_painter_config.yaml`
-- Local (requires GPU + `comlrl` env): `python3 str_painter/train/train.py --config str_painter/configs/str_painter_config.yaml`
-- Slurm: copy `str_painter/scripts/train_str_painter_grpo_sbatch.example.sh` to `str_painter/scripts/train_str_painter_grpo_sbatch.sh` (ignored by git), then run it.
-- Multi-turn: set `trainer.num_turns > 1` (uses `external.mode=draw_feedback` for coordinate feedback).
+Configs: `house_builder/configs/house_builder_magrpo_config.yaml`, `house_builder/configs/house_builder_iac_config.yaml`, `house_builder/configs/house_builder_maac_config.yaml`.
+
+Local (requires GPU + `comlrl` env):
+1. `python3 house_builder/train/train_magrpo.py --config house_builder/configs/house_builder_magrpo_config.yaml`
+2. `python3 house_builder/train/train_iac.py --config house_builder/configs/house_builder_iac_config.yaml`
+3. `python3 house_builder/train/train_maac.py --config house_builder/configs/house_builder_maac_config.yaml`
+
+Multi-turn: set `magrpo.num_turns` / `iac.num_turns` / `maac.num_turns` > 1 and choose `external.mode` from `perfect_feedback`, `position_feedback`, `position_modification`, `rect_modification`, `resource_schedule`, or `score_feedback` (see `house_builder/external/__init__.py`).

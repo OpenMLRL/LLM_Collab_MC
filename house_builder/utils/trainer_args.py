@@ -125,6 +125,7 @@ def get_trainer_args(cfg: Dict[str, Any]) -> MAGRPOConfig:
     candidate.update(
         {
             "rollout_buffer_size": _as_int(tr.get("rollout_buffer_size", 2), 2),
+            "train_batch_size": _as_opt_int(tr.get("train_batch_size", None), None),
             "eval_interval": _as_int(tr.get("eval_interval", 16), 16),
             "eval_num_samples": _as_int(tr.get("eval_num_samples", 4), 4),
             "eval_batch_size": _as_int(tr.get("eval_batch_size", 1), 1),

@@ -34,7 +34,7 @@ node test/view_building_demo/build_house_demo.cjs \
 
 ## Slurm (GPU) run
 
-If CPU inference is too slow, run on a GPU node with an interactive allocation (same idea as `baselines/2d_painting`):
+If CPU inference is too slow, run on a GPU node with an interactive allocation:
 
 ```bash
 salloc --account=YOUR_ACCOUNT --partition=YOUR_PARTITION --nodes=1 --gpus-per-node=1 --ntasks=1 --cpus-per-task=16 --mem=64g --time=02:00:00
