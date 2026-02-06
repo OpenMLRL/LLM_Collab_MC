@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Any, Callable, Dict, List, Mapping
 
 from LLM_Collab_Minecraft.house_builder.utils.house_builder import (
@@ -39,7 +38,7 @@ def _as_int(x: Any, default: int) -> int:
 
 
 def _task_from_batch_item(item: Mapping[str, Any]) -> TaskSpec:
-    palette_raw = item.get("palette") or {}
+    inventory_raw = item.get("inventory") or {}
     layers_by_y = item.get("layers_by_y") or {}
     if isinstance(layers_by_y, dict):
         layers_by_y = {int(k): list(v) for k, v in layers_by_y.items()}
@@ -47,7 +46,7 @@ def _task_from_batch_item(item: Mapping[str, Any]) -> TaskSpec:
         task_id=str(item.get("task_id") or ""),
         local_bbox_from=[_as_int(v, 0) for v in (item.get("local_bbox_from") or [0, 0, 0])],
         local_bbox_to=[_as_int(v, 0) for v in (item.get("local_bbox_to") or [0, 0, 0])],
-        palette={str(k): str(v) for k, v in palette_raw.items()},
+        inventory={str(k): str(v) for k, v in inventory_raw.items()},
         layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
     )
 
@@ -57,11 +56,15 @@ def _get_rpg_state(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(state, dict):
         return state
 
-    rpg_cfg = cfg.get("RPG") or cfg.get("rpg") or {}
-    if not isinstance(rpg_cfg, dict):
-        rpg_cfg = {}
-    player_cfg = rpg_cfg.get("player") or {}
-    spider_cfg = rpg_cfg.get("spider") or {}
+    task_cfg = cfg.get("task") or {}
+    if not isinstance(task_cfg, dict):
+        task_cfg = {}
+    player_cfg = task_cfg.get("player") or {}
+    if not isinstance(player_cfg, dict):
+        player_cfg = {}
+    spider_cfg = task_cfg.get("spider") or {}
+    if not isinstance(spider_cfg, dict):
+        spider_cfg = {}
 
     player_hp = _as_int(player_cfg.get("hp", 0), 0)
     spider_num = _as_int(spider_cfg.get("num", 0), 0)
@@ -122,33 +125,24 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         output_cfg = {}
     output_verbose = bool(output_cfg.get("verbose", False))
 
-    debug_cfg = cfg.get("debug") or {}
-    if not isinstance(debug_cfg, dict):
-        debug_cfg = {}
-
-    debug_enabled = (bool(debug_cfg.get("enabled", False)) or (os.environ.get("HOUSE_BUILDER_DEBUG") == "1")) and output_verbose
-    debug_max_prints = _as_int(debug_cfg.get("max_prints", 0), 0)
-    if debug_enabled and debug_max_prints <= 0:
-        debug_max_prints = 10
-    debug_every_n_calls = _as_int(debug_cfg.get("every_n_calls", 0), 0)
-    debug_empty_char = str(debug_cfg.get("empty_char") or ".")[:1] or "."
-    debug_raw_output = bool(debug_cfg.get("raw_output", False))
-    debug_render_layers = bool(debug_cfg.get("render_merged_layers", True))
-    debug_state = {"calls": 0, "printed": 0}
+    debug_enabled = output_verbose
+    debug_empty_char = "."
+    debug_raw_output = False
+    debug_render_layers = True
     rpg_state = _get_rpg_state(cfg)
 
     def _allowed_blocks_for_task(task: TaskSpec, overrides: List[str]) -> List[str]:
         if overrides:
             return unique_block_list(overrides)
-        return unique_block_list(task.palette.values())
+        return unique_block_list(task.inventory.values())
 
     def _render_layers(task: TaskSpec, obs_map: Mapping[tuple[int, int, int], str]) -> str:
-        palette_rev: Dict[str, str] = {}
-        for key, value in task.palette.items():
+        inventory_rev: Dict[str, str] = {}
+        for key, value in task.inventory.items():
             block_norm = normalize_block_id(value)
-            if block_norm and block_norm not in palette_rev:
-                palette_rev[block_norm] = str(key)
-        air_key = palette_rev.get("air")
+            if block_norm and block_norm not in inventory_rev:
+                inventory_rev[block_norm] = str(key)
+        air_key = inventory_rev.get("air")
 
         min_x = min(task.local_bbox_from[0], task.local_bbox_to[0])
         max_x = max(task.local_bbox_from[0], task.local_bbox_to[0])
@@ -164,7 +158,7 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
                 row: List[str] = []
                 for x in range(min_x, max_x + 1):
                     block = normalize_block_id(obs_map.get((x, y, z), "air"))
-                    ch = palette_rev.get(block)
+                    ch = inventory_rev.get(block)
                     if ch is None:
                         if block in ("air", "cave_air", "void_air"):
                             ch = air_key if air_key is not None else debug_empty_char
@@ -186,12 +180,6 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
     ) -> None:
         if not debug_enabled:
             return
-        debug_state["calls"] += 1
-        if debug_state["printed"] >= debug_max_prints:
-            return
-        if debug_every_n_calls > 0 and (debug_state["calls"] % debug_every_n_calls) != 0:
-            return
-        debug_state["printed"] += 1
         turn_str = f" turn={int(turn_idx)}" if turn_idx is not None else ""
         print(
             f"[house_builder debug] {task.task_id}{turn_str} "

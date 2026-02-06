@@ -1,6 +1,6 @@
 {
   "task_id": "house_builder_0002",
-  "palette": {
+  "inventory": {
     "C": "white_concrete",
     "O": "obsidian",
     "S": "stone_stairs",

@@ -24,10 +24,10 @@ def _as_int_list(value: Any, default: List[int]) -> List[int]:
 
 
 def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
-    palette_raw = ctx.get("palette") or {}
+    inventory_raw = ctx.get("inventory") or {}
     layers_raw = ctx.get("layers_by_y") or {}
-    if not isinstance(palette_raw, dict):
-        palette_raw = {}
+    if not isinstance(inventory_raw, dict):
+        inventory_raw = {}
     if not isinstance(layers_raw, dict):
         layers_raw = {}
 
@@ -37,12 +37,12 @@ def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
         task_id=str(ctx.get("task_id") or ""),
         local_bbox_from=_as_int_list(ctx.get("local_bbox_from"), [0, 0, 0]),
         local_bbox_to=_as_int_list(ctx.get("local_bbox_to"), [0, 0, 0]),
-        palette={str(k): str(v) for k, v in palette_raw.items()},
+        inventory={str(k): str(v) for k, v in inventory_raw.items()},
         layers_by_y=layers_by_y,
     )
 
 
-def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, palette: Dict[str, str]) -> List[str]:
+def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, inventory: Dict[str, str]) -> List[str]:
     key = "allowed_blocks_agent1" if agent_idx == 0 else "allowed_blocks_agent2"
     raw = ctx.get(key) or []
     if isinstance(raw, (list, tuple)):
@@ -50,7 +50,7 @@ def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, palette: Dict[str, str]
     else:
         blocks = []
     if not blocks:
-        blocks = unique_block_list(palette.values())
+        blocks = unique_block_list(inventory.values())
     return blocks
 
 
@@ -102,7 +102,7 @@ def format_followup_prompts(
 
     accepted_all: List[str] = []
     for agent_idx in range(n):
-        allowed = _allowed_blocks(ctx, agent_idx, task.palette)
+        allowed = _allowed_blocks(ctx, agent_idx, task.inventory)
         completion = agent_completions[agent_idx] if agent_idx < len(agent_completions) else ""
         lines = extract_command_lines(completion)
         accepted, _rejected = validate_and_normalize_mc_commands(
@@ -142,7 +142,7 @@ def format_followup_prompts(
 
     lim = limit
     if lim is None:
-        lim = _as_int(ctx.get("lim") or ctx.get("modification_limit") or 0, 0)
+        lim = _as_int(ctx.get("lim") or 0, 0)
     if lim is not None and lim > 0:
         wrong_positions = wrong_positions[: int(lim)]
 
@@ -165,6 +165,8 @@ def format_followup_prompts(
             parts.append("")
         if original_prompt_flag and base_user:
             parts.append(base_user)
+        parts.append("")
+        parts.append("Do not output any text other than commands.")
         parts.append("")
         parts.append("Modification suggestions (use these to fix errors):")
         parts.append(suggestions)

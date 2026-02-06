@@ -30,7 +30,6 @@ from LLM_Collab_Minecraft.str_builder.external import (
 )
 from LLM_Collab_Minecraft.str_builder.rewards.str_builder_reward import get_reward_function
 from LLM_Collab_Minecraft.str_builder.utils.config import apply_overrides, load_yaml, resolve_path
-from LLM_Collab_Minecraft.str_builder.utils.patches import apply_default_patches
 from LLM_Collab_Minecraft.str_builder.utils.prompting import apply_graph_setting, apply_prompt_defaults
 from LLM_Collab_Minecraft.str_builder.utils.str_builder import load_tasks_from_csv
 from LLM_Collab_Minecraft.str_builder.utils.trainer_args import get_iac_args
@@ -127,13 +126,11 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
 
     agent1_blocks = _as_block_list(task_cfg.get("block_agent1"))
     if not agent1_blocks:
-        b0 = str(task_cfg.get("block_even") or "white_concrete").strip()
-        b1 = str(task_cfg.get("block_odd") or "black_concrete").strip()
-        agent1_blocks = [b0, b1]
+        raise ValueError("task.block_agent1 must be provided and non-empty")
 
     agent2_blocks = _as_block_list(task_cfg.get("block_agent2"))
-    if not agent2_blocks:
-        agent2_blocks = [str(task_cfg.get("block_agent2") or "red_concrete").strip() or "red_concrete"]
+    if num_agents > 1 and not agent2_blocks:
+        raise ValueError("task.block_agent2 must be provided when num_agents > 1")
 
     block_agent1_lines = "\n".join(f"- {b}" for b in agent1_blocks)
     block_agent2_lines = "\n".join(f"- {b}" for b in agent2_blocks)
@@ -266,18 +263,13 @@ def main() -> int:
     model_name = str(model_cfg.get("name") or "")
     if not model_name:
         raise ValueError("model.name is required")
-    tokenizer_kwargs = model_cfg.get("tokenizer_kwargs") or {}
-    model_kwargs = model_cfg.get("model_kwargs") or {}
-    if not isinstance(tokenizer_kwargs, dict):
-        tokenizer_kwargs = {}
-    if not isinstance(model_kwargs, dict):
-        model_kwargs = {}
+    model_kwargs: Dict[str, Any] = {}
 
-    dtype = _map_dtype(model_cfg.get("dtype") or model_cfg.get("torch_dtype") or model_kwargs.get("torch_dtype"))
-    if dtype is not None and "torch_dtype" not in model_kwargs:
+    dtype = _map_dtype(model_cfg.get("dtype") or model_cfg.get("torch_dtype"))
+    if dtype is not None:
         model_kwargs["torch_dtype"] = dtype
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_kwargs)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -285,6 +277,11 @@ def main() -> int:
     formatters = _build_formatters(cfg, num_agents=num_agents, tokenizer=tokenizer)
     prompt_to_item: Dict[str, Dict[str, Any]] = {}
     dataset_prompt_map: Dict[str, Dict[str, Any]] = {}
+    critic_model_kwargs: Dict[str, Any] = {}
+    if isinstance(critic_cfg, dict):
+        critic_dtype = _map_dtype(critic_cfg.get("dtype") or critic_cfg.get("torch_dtype"))
+        if critic_dtype is not None:
+            critic_model_kwargs["torch_dtype"] = critic_dtype
 
     def _normalize_key(s: str) -> str:
         return " ".join((s or "").split()).strip()
@@ -404,7 +401,6 @@ def main() -> int:
     import LLM_Collab_Minecraft.str_builder.external as external_mod  # type: ignore
 
     external_mod.VERBOSE = bool(output_verbose)
-    apply_default_patches(cfg)
 
     is_multi_turn = False
     try:
@@ -421,9 +417,8 @@ def main() -> int:
         "train_dataset": train_ds,
         "eval_dataset": eval_ds,
         "model_config": {
-            "tokenizer_kwargs": tokenizer_kwargs,
             "model_kwargs": model_kwargs,
-            "critic_model_kwargs": critic_cfg.get("model_kwargs", {}),
+            "critic_model_kwargs": critic_model_kwargs,
             "critic_value_head_hidden_dim": iac_cfg.get("critic_value_head_hidden_dim"),
             "value_head_hidden_dim": iac_cfg.get("value_head_hidden_dim"),
         },
@@ -475,12 +470,10 @@ def main() -> int:
 
         agent1_blocks = _as_block_list(task_cfg.get("block_agent1"))
         if not agent1_blocks:
-            b0 = str(task_cfg.get("block_even") or "white_concrete").strip()
-            b1 = str(task_cfg.get("block_odd") or "black_concrete").strip()
-            agent1_blocks = [b0, b1]
+            raise ValueError("task.block_agent1 must be provided and non-empty")
         agent2_blocks = _as_block_list(task_cfg.get("block_agent2"))
-        if not agent2_blocks:
-            agent2_blocks = [str(task_cfg.get("block_agent2") or "red_concrete").strip() or "red_concrete"]
+        if num_agents > 1 and not agent2_blocks:
+            raise ValueError("task.block_agent2 must be provided when num_agents > 1")
 
         block_agent1_lines = "\n".join(f"- {b}" for b in agent1_blocks)
         block_agent2_lines = "\n".join(f"- {b}" for b in agent2_blocks)

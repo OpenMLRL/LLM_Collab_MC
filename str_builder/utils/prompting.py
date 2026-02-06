@@ -63,7 +63,7 @@ Constraints:
 - Allowed commands: /setblock only.
 - Use absolute integer coordinates only (no ~).
 - Place blocks ONLY at '#' positions; leave '.' as air.
-- Adjacent blocks (sharing a side) must NOT be the same color.
+- Adjacent blocks (sharing a side) must NOT be the same texture.
 - Every coordinate must be within the bbox.
 Format: /setblock <x> <y> <z> <block>
 """
@@ -96,7 +96,7 @@ Constraints:
 - Allowed commands: /setblock only.
 - Use absolute integer coordinates only (no ~).
 - Place blocks ONLY at '#' positions; leave '.' as air.
-- Adjacent blocks (sharing a side) must NOT be the same color.
+- Adjacent blocks (sharing a side) must NOT be the same texture.
 - Every coordinate must be within the bbox.
 Format: /setblock <x> <y> <z> <block>
 """

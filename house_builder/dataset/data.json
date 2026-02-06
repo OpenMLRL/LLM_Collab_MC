@@ -1,7 +1,7 @@
 [
   {
     "task_id": "house_builder_0002",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -126,7 +126,7 @@
   },
   {
     "task_id": "house_builder_0101",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -241,7 +241,7 @@
   },
   {
     "task_id": "house_builder_0102",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -356,7 +356,7 @@
   },
   {
     "task_id": "house_builder_0103",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -471,7 +471,7 @@
   },
   {
     "task_id": "house_builder_0104",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -586,7 +586,7 @@
   },
   {
     "task_id": "house_builder_0105",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -701,7 +701,7 @@
   },
   {
     "task_id": "house_builder_0106",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -816,7 +816,7 @@
   },
   {
     "task_id": "house_builder_0107",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -931,7 +931,7 @@
   },
   {
     "task_id": "house_builder_0108",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",
@@ -1046,7 +1046,7 @@
   },
   {
     "task_id": "house_builder_0109",
-    "palette": {
+    "inventory": {
       "C": "white_concrete",
       "O": "obsidian",
       "S": "stone_stairs",

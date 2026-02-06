@@ -42,6 +42,10 @@ def format_followup_prompts(
 
     allowed_blocks_agent1 = [str(b) for b in (ctx.get("allowed_blocks_agent1") or []) if str(b).strip()]
     allowed_blocks_agent2 = [str(b) for b in (ctx.get("allowed_blocks_agent2") or []) if str(b).strip()]
+    if not allowed_blocks_agent1:
+        raise ValueError("allowed_blocks_agent1 must be provided and non-empty")
+    if n >= 2 and not allowed_blocks_agent2:
+        raise ValueError("allowed_blocks_agent2 must be provided when num_agents >= 2")
     max_commands_total = int(ctx.get("max_commands_total") or 600)
 
     max_per = max(1, max_commands_total // n)
@@ -73,7 +77,7 @@ def format_followup_prompts(
     prompts: List[str] = [""] * n
     for agent_idx in range(n):
         base_user = user_prompt_single if n == 1 else (user_prompt_agent1 if agent_idx == 0 else user_prompt_agent2)
-        allowed_blocks = allowed_blocks_agent1 if agent_idx == 0 else (allowed_blocks_agent2 or allowed_blocks_agent1)
+        allowed_blocks = allowed_blocks_agent1 if agent_idx == 0 else allowed_blocks_agent2
         allowed_block_lines = "\n".join(f"- {b}" for b in allowed_blocks) if allowed_blocks else "- (see original prompt)"
 
         parts = []

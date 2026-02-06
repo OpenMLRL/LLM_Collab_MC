@@ -23,10 +23,10 @@ def _as_int_list(value: Any, default: List[int]) -> List[int]:
 
 
 def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
-    palette_raw = ctx.get("palette") or {}
+    inventory_raw = ctx.get("inventory") or {}
     layers_raw = ctx.get("layers_by_y") or {}
-    if not isinstance(palette_raw, dict):
-        palette_raw = {}
+    if not isinstance(inventory_raw, dict):
+        inventory_raw = {}
     if not isinstance(layers_raw, dict):
         layers_raw = {}
 
@@ -36,12 +36,12 @@ def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
         task_id=str(ctx.get("task_id") or ""),
         local_bbox_from=_as_int_list(ctx.get("local_bbox_from"), [0, 0, 0]),
         local_bbox_to=_as_int_list(ctx.get("local_bbox_to"), [0, 0, 0]),
-        palette={str(k): str(v) for k, v in palette_raw.items()},
+        inventory={str(k): str(v) for k, v in inventory_raw.items()},
         layers_by_y=layers_by_y,
     )
 
 
-def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, palette: Dict[str, str]) -> List[str]:
+def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, inventory: Dict[str, str]) -> List[str]:
     key = "allowed_blocks_agent1" if agent_idx == 0 else "allowed_blocks_agent2"
     raw = ctx.get(key) or []
     if isinstance(raw, (list, tuple)):
@@ -49,7 +49,7 @@ def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, palette: Dict[str, str]
     else:
         blocks = []
     if not blocks:
-        blocks = unique_block_list(palette.values())
+        blocks = unique_block_list(inventory.values())
     return blocks
 
 
@@ -63,36 +63,21 @@ def _split_limits(total: int, num_agents: int) -> List[int]:
 
 
 def _extract_rpg_numbers(ctx: Dict[str, Any]) -> tuple[float, float]:
-    candidates = [ctx.get("_rpg_state"), ctx.get("rpg_state"), ctx.get("rpg"), ctx.get("RPG")]
+    state = ctx.get("rpg_state")
+    if not isinstance(state, dict):
+        return 0.0, 0.0
     player_hp = 0.0
     spider_dmg = 0.0
-    for cand in candidates:
-        if not isinstance(cand, dict):
-            continue
-        if "player_hp" in cand:
-            try:
-                player_hp = float(cand.get("player_hp", 0.0) or 0.0)
-            except Exception:
-                player_hp = 0.0
-        player_cfg = cand.get("player") if isinstance(cand.get("player"), dict) else None
-        if player_cfg and player_hp <= 0:
-            try:
-                player_hp = float(player_cfg.get("hp", 0.0) or 0.0)
-            except Exception:
-                player_hp = 0.0
-        if "spider_total_dmg" in cand:
-            try:
-                spider_dmg = float(cand.get("spider_total_dmg", 0.0) or 0.0)
-            except Exception:
-                spider_dmg = 0.0
-        spider_cfg = cand.get("spider") if isinstance(cand.get("spider"), dict) else None
-        if spider_cfg and spider_dmg <= 0:
-            try:
-                spider_dmg = float(spider_cfg.get("dmg", spider_cfg.get("atk_high", 0.0)) or 0.0)
-            except Exception:
-                spider_dmg = 0.0
-        if player_hp > 0 or spider_dmg > 0:
-            break
+    if "player_hp" in state:
+        try:
+            player_hp = float(state.get("player_hp", 0.0) or 0.0)
+        except Exception:
+            player_hp = 0.0
+    if "spider_total_dmg" in state:
+        try:
+            spider_dmg = float(state.get("spider_total_dmg", 0.0) or 0.0)
+        except Exception:
+            spider_dmg = 0.0
     return player_hp, spider_dmg
 
 
@@ -117,7 +102,7 @@ def _compute_reward(ctx: Dict[str, Any], agent_completions: List[str], num_agent
     accepted_all: List[str] = []
     accepted_by_agent: List[List[str]] = []
     for agent_idx in range(n):
-        allowed = _allowed_blocks(ctx, agent_idx, task.palette)
+        allowed = _allowed_blocks(ctx, agent_idx, task.inventory)
         completion = agent_completions[agent_idx] if agent_idx < len(agent_completions) else ""
         lines = extract_command_lines(completion)
         accepted, _rejected = validate_and_normalize_mc_commands(
@@ -192,6 +177,7 @@ def format_followup_prompts(
         parts.append("Score feedback:")
         parts.append(f"- Turn: {turn_number}")
         parts.append(f"- Previous reward: {reward_text}")
+        parts.append("- Do not output any text other than commands.")
         if original_prompt_flag and base_user:
             parts.append("")
             parts.append(base_user)

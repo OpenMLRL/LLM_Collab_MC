@@ -1,6 +1,6 @@
 {
   "task_id": "house_builder_0001",
-  "palette": {
+  "inventory": {
     "O": "oak_planks",
     "W": "glass_pane",
     "C": "cobblestone",

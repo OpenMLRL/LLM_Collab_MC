@@ -260,7 +260,7 @@ class TaskSpec:
     task_id: str
     local_bbox_from: List[int]
     local_bbox_to: List[int]
-    palette: Dict[str, str]
+    inventory: Dict[str, str]
     layers_by_y: Dict[int, List[str]]
 
 
@@ -283,18 +283,18 @@ def load_tasks_from_json(json_path: str) -> List[TaskSpec]:
             raise ValueError(f"Task entry {idx} must be an object")
         task_id = str(task_obj.get("task_id") or f"house_builder_{idx:04d}")
 
-        palette_raw = task_obj.get("palette")
-        if not isinstance(palette_raw, dict) or not palette_raw:
-            raise ValueError(f"{task_id}: palette must be a non-empty mapping")
-        palette: Dict[str, str] = {}
-        for key, value in palette_raw.items():
+        inventory_raw = task_obj.get("inventory")
+        if not isinstance(inventory_raw, dict) or not inventory_raw:
+            raise ValueError(f"{task_id}: inventory must be a non-empty mapping")
+        inventory: Dict[str, str] = {}
+        for key, value in inventory_raw.items():
             k = str(key)
             if len(k) != 1:
-                raise ValueError(f"{task_id}: palette key must be a single character, got {k!r}")
+                raise ValueError(f"{task_id}: inventory key must be a single character, got {k!r}")
             v = str(value).strip()
             if not v:
-                raise ValueError(f"{task_id}: palette value for {k!r} is empty")
-            palette[k] = v
+                raise ValueError(f"{task_id}: inventory value for {k!r} is empty")
+            inventory[k] = v
 
         target_spec = task_obj.get("target_spec") or {}
         if not isinstance(target_spec, dict):
@@ -316,8 +316,8 @@ def load_tasks_from_json(json_path: str) -> List[TaskSpec]:
                 if len(row_str) != width:
                     raise ValueError(f"{task_id}: row width mismatch at y={y}")
                 for ch in row_str:
-                    if ch not in palette:
-                        raise ValueError(f"{task_id}: unknown palette key {ch!r} at y={y}")
+                    if ch not in inventory:
+                        raise ValueError(f"{task_id}: unknown inventory key {ch!r} at y={y}")
                 normalized_rows.append(row_str)
             if depth is None:
                 depth = len(normalized_rows)
@@ -395,7 +395,7 @@ def load_tasks_from_json(json_path: str) -> List[TaskSpec]:
                 task_id=task_id,
                 local_bbox_from=local_bbox_from,
                 local_bbox_to=local_bbox_to,
-                palette=palette,
+                inventory=inventory,
                 layers_by_y=layers_by_y,
             )
         )
@@ -404,7 +404,7 @@ def load_tasks_from_json(json_path: str) -> List[TaskSpec]:
 
 
 def build_expected_map(task: TaskSpec) -> Dict[Tuple[int, int, int], str]:
-    palette_norm = {k: normalize_block_id(v) for k, v in task.palette.items()}
+    inventory_norm = {k: normalize_block_id(v) for k, v in task.inventory.items()}
 
     min_lx = min(task.local_bbox_from[0], task.local_bbox_to[0])
     min_ly = min(task.local_bbox_from[1], task.local_bbox_to[1])
@@ -421,9 +421,9 @@ def build_expected_map(task: TaskSpec) -> Dict[Tuple[int, int, int], str]:
             lz = min_lz + rz
             for rx, ch in enumerate(row):
                 lx = min_lx + rx
-                block = palette_norm.get(ch)
+                block = inventory_norm.get(ch)
                 if block is None:
-                    raise ValueError(f"{task.task_id}: unknown palette key {ch!r}")
+                    raise ValueError(f"{task.task_id}: unknown inventory key {ch!r}")
                 expected[(lx, ly, lz)] = block
 
     return expected
@@ -442,8 +442,8 @@ def compute_resource_limits(task: TaskSpec, *, num_agents: int) -> Dict[str, int
     n = max(1, int(num_agents))
     counts = count_expected_blocks(task)
     limits: Dict[str, int] = {}
-    palette_blocks = {normalize_block_id(v) for v in task.palette.values()}
-    for block in sorted(counts.keys() | palette_blocks):
+    inventory_blocks = {normalize_block_id(v) for v in task.inventory.values()}
+    for block in sorted(counts.keys() | inventory_blocks):
         if block in ("air", "cave_air", "void_air"):
             continue
         count = int(counts.get(block, 0))
@@ -497,7 +497,7 @@ def score_house_builder(*, task: TaskSpec, world_scan_blocks: List[Dict[str, Any
 def rows_to_rects(
     *,
     rows: List[str],
-    palette: Dict[str, str],
+    inventory: Dict[str, str],
     min_x: int,
     min_z: int,
 ) -> List[Tuple[int, int, int, int, str]]:
@@ -524,9 +524,9 @@ def rows_to_rects(
 
         new_active: Dict[Tuple[int, int, str], List[int | str]] = {}
         for x1, x2, ch in runs:
-            block = palette.get(ch)
+            block = inventory.get(ch)
             if block is None:
-                raise ValueError(f"unknown palette key {ch!r} in layer")
+                raise ValueError(f"unknown inventory key {ch!r} in layer")
             key = (x1, x2, block)
             if key in active:
                 rect = active.pop(key)
@@ -570,7 +570,7 @@ def format_layers_text(
         rows = task.layers_by_y.get(y)
         if rows is None:
             raise ValueError(f"{task.task_id}: missing layer y={y}")
-        rects = rows_to_rects(rows=rows, palette=task.palette, min_x=min_x, min_z=min_z)
+        rects = rows_to_rects(rows=rows, inventory=task.inventory, min_x=min_x, min_z=min_z)
         if not include_air:
             rects = [r for r in rects if normalize_block_id(r[4]) not in ("air", "cave_air", "void_air")]
         y_abs = y + offset_y
@@ -594,5 +594,5 @@ def unique_block_list(values: Iterable[str]) -> List[str]:
     return out
 
 
-def legend_lines(palette: Dict[str, str]) -> str:
-    return "\n".join(f"{k} = {v}" for k, v in palette.items())
+def legend_lines(inventory: Dict[str, str]) -> str:
+    return "\n".join(f"{k} = {v}" for k, v in inventory.items())

@@ -20,10 +20,10 @@ def _as_int_list(value: Any, default: List[int]) -> List[int]:
 
 
 def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
-    palette_raw = ctx.get("palette") or {}
+    inventory_raw = ctx.get("inventory") or {}
     layers_raw = ctx.get("layers_by_y") or {}
-    if not isinstance(palette_raw, dict):
-        palette_raw = {}
+    if not isinstance(inventory_raw, dict):
+        inventory_raw = {}
     if not isinstance(layers_raw, dict):
         layers_raw = {}
 
@@ -33,12 +33,12 @@ def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
         task_id=str(ctx.get("task_id") or ""),
         local_bbox_from=_as_int_list(ctx.get("local_bbox_from"), [0, 0, 0]),
         local_bbox_to=_as_int_list(ctx.get("local_bbox_to"), [0, 0, 0]),
-        palette={str(k): str(v) for k, v in palette_raw.items()},
+        inventory={str(k): str(v) for k, v in inventory_raw.items()},
         layers_by_y=layers_by_y,
     )
 
 
-def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, palette: Dict[str, str]) -> List[str]:
+def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, inventory: Dict[str, str]) -> List[str]:
     key = "allowed_blocks_agent1" if agent_idx == 0 else "allowed_blocks_agent2"
     raw = ctx.get(key) or []
     if isinstance(raw, (list, tuple)):
@@ -46,7 +46,7 @@ def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, palette: Dict[str, str]
     else:
         blocks = []
     if not blocks:
-        blocks = unique_block_list(palette.values())
+        blocks = unique_block_list(inventory.values())
     return blocks
 
 
@@ -113,7 +113,7 @@ def format_followup_prompts(
     prompts: List[str] = [""] * n
     for agent_idx in range(n):
         base_user = user_prompt_single if n == 1 else (user_prompt_agent1 if agent_idx == 0 else user_prompt_agent2)
-        allowed_blocks = _allowed_blocks(ctx, agent_idx, task.palette)
+        allowed_blocks = _allowed_blocks(ctx, agent_idx, task.inventory)
         allowed_block_lines = "\n".join(f"- {b}" for b in allowed_blocks) if allowed_blocks else "- (see original prompt)"
 
         parts = []
@@ -126,6 +126,7 @@ def format_followup_prompts(
                 f"- Turn: {turn_number}",
                 "- Coordinates are absolute (x, y, z).",
                 "- Output /fill commands only (no markdown).",
+                "- Do not output any text other than commands.",
                 f"- Choose a subset of about half the positions (target size ~ {target_count}).",
                 "- Use: /fill x y z x y z block",
                 f"- Max commands allowed: {max_limits[agent_idx]}",

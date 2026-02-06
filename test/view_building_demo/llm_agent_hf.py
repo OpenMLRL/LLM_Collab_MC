@@ -75,7 +75,6 @@ def main() -> int:
     parser.add_argument("--top-p", type=float, default=0.95)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--hf-token", default=None)
-    parser.add_argument("--trust-remote-code", action="store_true", default=True)
     args = parser.parse_args()
 
     payload = _read_payload()
@@ -116,12 +115,10 @@ def main() -> int:
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_id,
-        trust_remote_code=args.trust_remote_code,
         token=hf_token,
     )
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        trust_remote_code=args.trust_remote_code,
         torch_dtype=dtype,
         token=hf_token,
     )

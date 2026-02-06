@@ -49,6 +49,10 @@ def format_followup_prompts(
 
     allowed_blocks_agent1 = [str(b) for b in (ctx.get("allowed_blocks_agent1") or []) if str(b).strip()]
     allowed_blocks_agent2 = [str(b) for b in (ctx.get("allowed_blocks_agent2") or []) if str(b).strip()]
+    if not allowed_blocks_agent1:
+        raise ValueError("allowed_blocks_agent1 must be provided and non-empty")
+    if n >= 2 and not allowed_blocks_agent2:
+        raise ValueError("allowed_blocks_agent2 must be provided when num_agents >= 2")
     max_commands_total = int(ctx.get("max_commands_total") or 600)
 
     max_per = max(1, max_commands_total // n)
@@ -73,7 +77,7 @@ def format_followup_prompts(
     accepted_all: List[str] = []
     for agent_idx in range(n):
         completion = agent_completions[agent_idx] if agent_idx < len(agent_completions) else ""
-        allowed = allowed_blocks_agent1 if agent_idx == 0 else (allowed_blocks_agent2 or allowed_blocks_agent1)
+        allowed = allowed_blocks_agent1 if agent_idx == 0 else allowed_blocks_agent2
         lines = extract_command_lines(completion)
         accepted, _rejected = validate_and_normalize_mc_commands(
             lines=lines,
@@ -138,7 +142,7 @@ def format_followup_prompts(
                 "- Output /setblock commands only (no markdown).",
                 "- Fix ONLY the listed positions.",
                 "",
-                "Set your correct color at:",
+                "Set your correct texture at:",
                 _format_positions(wrong_by_agent.get(agent_idx, [])),
             ]
         )

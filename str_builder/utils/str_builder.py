@@ -267,33 +267,33 @@ def _is_air(block_name: str | None) -> bool:
     return b in {"air", "cave_air", "void_air"}
 
 
-_COLOR_PREFIXES = (
-    "light_blue",
-    "light_gray",
-    "orange",
-    "magenta",
-    "yellow",
-    "lime",
-    "pink",
-    "cyan",
-    "purple",
-    "blue",
-    "brown",
-    "green",
-    "red",
-    "black",
-    "white",
-    "gray",
-)
+_TEXTURE_ALIASES = {
+    "oak_planks": "wood",
+    "oak_wood": "wood",
+    "stone": "stone",
+    "cobblestone": "stone",
+    "smooth_stone": "stone",
+    "stone_bricks": "stone",
+    "white_concrete": "concrete",
+    "obsidian": "obsidian",
+}
 
 
 def block_to_color_key(block_id: str) -> str:
     s = normalize_block_id(str(block_id or "")).lower()
     if not s:
         return ""
-    for color in _COLOR_PREFIXES:
-        if s == color or s.startswith(color + "_"):
-            return color
+    alias = _TEXTURE_ALIASES.get(s)
+    if alias is not None:
+        return alias
+    if s.endswith("_planks") or s.endswith("_wood"):
+        return "wood"
+    if s == "stone" or s.endswith("_stone") or s.endswith("_stone_bricks"):
+        return "stone"
+    if s.endswith("_concrete"):
+        return "concrete"
+    if s == "obsidian":
+        return "obsidian"
     return s
 
 
@@ -329,8 +329,11 @@ def _normalize_palette(palette: List[str]) -> List[str]:
     out: List[str] = []
     for b in palette:
         s = normalize_block_id(str(b or "")).strip()
-        if s:
-            out.append(s)
+        if not s:
+            continue
+        if s in ("air", "cave_air", "void_air"):
+            continue
+        out.append(s)
     return out
 
 
@@ -351,7 +354,7 @@ def build_target_color_map(
         palette = allowed_blocks_per_agent[i] if i < len(allowed_blocks_per_agent) else []
         palette = _normalize_palette(palette)
         if not palette:
-            palette = ["white_concrete"]
+            raise ValueError("allowed_blocks_per_agent entries must be non-empty")
         palettes.append(palette)
 
     expected: Dict[Tuple[int, int, int], str] = {}
@@ -459,7 +462,7 @@ def score_str_builder(
         for palette in allowed_blocks_per_agent:
             normalized_palette = _normalize_palette(palette)
             if not normalized_palette:
-                normalized_palette = ["white_concrete"]
+                raise ValueError("allowed_blocks_per_agent entries must be non-empty")
             if not set(normalized_palette).issubset(observed_blocks):
                 missing_agent_palette_count += 1
         penalty_missing_palette = 0.25 * float(missing_agent_palette_count)

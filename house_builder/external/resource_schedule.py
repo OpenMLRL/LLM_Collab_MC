@@ -30,10 +30,10 @@ def _as_int(value: Any, default: int) -> int:
 
 
 def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
-    palette_raw = ctx.get("palette") or {}
+    inventory_raw = ctx.get("inventory") or {}
     layers_raw = ctx.get("layers_by_y") or {}
-    if not isinstance(palette_raw, dict):
-        palette_raw = {}
+    if not isinstance(inventory_raw, dict):
+        inventory_raw = {}
     if not isinstance(layers_raw, dict):
         layers_raw = {}
 
@@ -43,12 +43,12 @@ def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
         task_id=str(ctx.get("task_id") or ""),
         local_bbox_from=_as_int_list(ctx.get("local_bbox_from"), [0, 0, 0]),
         local_bbox_to=_as_int_list(ctx.get("local_bbox_to"), [0, 0, 0]),
-        palette={str(k): str(v) for k, v in palette_raw.items()},
+        inventory={str(k): str(v) for k, v in inventory_raw.items()},
         layers_by_y=layers_by_y,
     )
 
 
-def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, palette: Dict[str, str]) -> List[str]:
+def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, inventory: Dict[str, str]) -> List[str]:
     key = "allowed_blocks_agent1" if agent_idx == 0 else "allowed_blocks_agent2"
     raw = ctx.get(key) or []
     if isinstance(raw, (list, tuple)):
@@ -56,7 +56,7 @@ def _allowed_blocks(ctx: Dict[str, Any], agent_idx: int, palette: Dict[str, str]
     else:
         blocks = []
     if not blocks:
-        blocks = unique_block_list(palette.values())
+        blocks = unique_block_list(inventory.values())
     return blocks
 
 
@@ -154,7 +154,7 @@ def format_followup_prompts(
     min_x = min(task.local_bbox_from[0], task.local_bbox_to[0])
     min_z = min(task.local_bbox_from[2], task.local_bbox_to[2])
     for y, rows in task.layers_by_y.items():
-        rects = rows_to_rects(rows=rows, palette=task.palette, min_x=min_x, min_z=min_z)
+        rects = rows_to_rects(rows=rows, inventory=task.inventory, min_x=min_x, min_z=min_z)
         for x1, z1, x2, z2, block in rects:
             block_norm = normalize_block_id(block)
             if block_norm in ("air", "cave_air", "void_air"):
@@ -165,7 +165,7 @@ def format_followup_prompts(
     accepted_by_agent: List[List[str]] = []
     used_by_agent: List[Dict[str, int]] = []
     for agent_idx in range(n):
-        allowed = _allowed_blocks(ctx, agent_idx, task.palette)
+        allowed = _allowed_blocks(ctx, agent_idx, task.inventory)
         completion = agent_completions[agent_idx] if agent_idx < len(agent_completions) else ""
         lines = extract_command_lines(completion)
         accepted, _rejected = validate_and_normalize_mc_commands(
@@ -186,7 +186,7 @@ def format_followup_prompts(
 
     def _format_remaining(rem: Dict[str, int], limits: Dict[str, int]) -> str:
         lines: List[str] = []
-        for _key, block in task.palette.items():
+        for _key, block in task.inventory.items():
             block_norm = normalize_block_id(block)
             if block_norm in ("air", "cave_air", "void_air"):
                 continue
@@ -205,7 +205,7 @@ def format_followup_prompts(
     prompts: List[str] = [""] * n
     for agent_idx in range(n):
         base_user = user_prompt_single if n == 1 else (user_prompt_agent1 if agent_idx == 0 else user_prompt_agent2)
-        allowed_blocks = _allowed_blocks(ctx, agent_idx, task.palette)
+        allowed_blocks = _allowed_blocks(ctx, agent_idx, task.inventory)
         allowed_norm = {normalize_block_id(b) for b in allowed_blocks}
 
         used = used_by_agent[agent_idx]
@@ -258,6 +258,8 @@ def format_followup_prompts(
         if original_prompt_flag and base_user:
             parts.append(base_user)
             parts.append("")
+        parts.append("Do not output any text other than commands.")
+        parts.append("")
         parts.append("Accepted commands from your previous turn:")
         parts.append(_format_accepted(accepted_by_agent[agent_idx]))
         parts.append("")

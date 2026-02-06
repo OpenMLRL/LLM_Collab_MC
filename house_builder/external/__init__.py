@@ -11,7 +11,6 @@ callback. This module provides a small adapter that:
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from . import common_prompt
 from . import perfect_feedback
 from . import position_feedback
 from . import position_modification
@@ -64,9 +63,6 @@ def get_external_transition(
 
     original_prompt_flag = bool(kwargs.get("original_prompt", True))
     previous_response_flag = bool(kwargs.get("previous_response", False))
-    common_prefix = kwargs.get("common_prefix")
-    common_suffix = kwargs.get("common_suffix")
-
     if mode_key in ("perfect_feedback", "perfect-feedback", "feedback"):
         prompts = perfect_feedback.format_followup_prompts(
             ctx=ctx,
@@ -77,7 +73,6 @@ def get_external_transition(
             prompt_history_per_agent=prompt_history_per_agent,
             response_history_per_agent=response_history_per_agent,
         )
-        prompts = [common_prompt.apply_common_prompt(p, prefix=common_prefix, suffix=common_suffix) for p in prompts]
         if VERBOSE:
             print("\n" + "=" * 60)
             print("EXTERNAL MODE PREVIEW: perfect_feedback")
@@ -96,7 +91,6 @@ def get_external_transition(
             prompt_history_per_agent=prompt_history_per_agent,
             response_history_per_agent=response_history_per_agent,
         )
-        prompts = [common_prompt.apply_common_prompt(p, prefix=common_prefix, suffix=common_suffix) for p in prompts]
         if VERBOSE:
             print("\n" + "=" * 60)
             print("EXTERNAL MODE PREVIEW: position_feedback")
@@ -116,7 +110,6 @@ def get_external_transition(
             prompt_history_per_agent=prompt_history_per_agent,
             response_history_per_agent=response_history_per_agent,
         )
-        prompts = [common_prompt.apply_common_prompt(p, prefix=common_prefix, suffix=common_suffix) for p in prompts]
         if VERBOSE:
             print("\n" + "=" * 60)
             print("EXTERNAL MODE PREVIEW: position_modification")
@@ -136,7 +129,6 @@ def get_external_transition(
             prompt_history_per_agent=prompt_history_per_agent,
             response_history_per_agent=response_history_per_agent,
         )
-        prompts = [common_prompt.apply_common_prompt(p, prefix=common_prefix, suffix=common_suffix) for p in prompts]
         if VERBOSE:
             print("\n" + "=" * 60)
             print("EXTERNAL MODE PREVIEW: rect_modification")
@@ -155,7 +147,6 @@ def get_external_transition(
             prompt_history_per_agent=prompt_history_per_agent,
             response_history_per_agent=response_history_per_agent,
         )
-        prompts = [common_prompt.apply_common_prompt(p, prefix=common_prefix, suffix=common_suffix) for p in prompts]
         if VERBOSE:
             print("\n" + "=" * 60)
             print("EXTERNAL MODE PREVIEW: resource_schedule")
@@ -174,7 +165,6 @@ def get_external_transition(
             prompt_history_per_agent=prompt_history_per_agent,
             response_history_per_agent=response_history_per_agent,
         )
-        prompts = [common_prompt.apply_common_prompt(p, prefix=common_prefix, suffix=common_suffix) for p in prompts]
         if VERBOSE:
             print("\n" + "=" * 60)
             print("EXTERNAL MODE PREVIEW: score_feedback")

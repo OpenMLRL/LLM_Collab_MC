@@ -40,7 +40,6 @@ from LLM_Collab_Minecraft.house_builder.utils.house_builder import (
     unique_block_list,
 )
 from LLM_Collab_Minecraft.house_builder.utils.config import apply_overrides, load_yaml, resolve_path
-from LLM_Collab_Minecraft.house_builder.utils.patches import apply_default_patches
 from LLM_Collab_Minecraft.house_builder.utils.prompting import apply_prompt_defaults
 from LLM_Collab_Minecraft.house_builder.utils.trainer_args import get_iac_args
 
@@ -88,12 +87,16 @@ def _as_int(value: Any, default: int) -> int:
 
 
 def _prepare_rpg_state(cfg: Dict[str, Any], seed: int) -> Dict[str, Any]:
-    rpg_cfg = cfg.get("RPG") or cfg.get("rpg") or {}
-    if not isinstance(rpg_cfg, dict):
-        rpg_cfg = {}
+    task_cfg = cfg.get("task") or {}
+    if not isinstance(task_cfg, dict):
+        task_cfg = {}
 
-    player_cfg = rpg_cfg.get("player") or {}
-    spider_cfg = rpg_cfg.get("spider") or {}
+    player_cfg = task_cfg.get("player") or {}
+    if not isinstance(player_cfg, dict):
+        player_cfg = {}
+    spider_cfg = task_cfg.get("spider") or {}
+    if not isinstance(spider_cfg, dict):
+        spider_cfg = {}
 
     player_hp = _as_int(player_cfg.get("hp", 20), 20)
 
@@ -124,9 +127,9 @@ def _prepare_rpg_state(cfg: Dict[str, Any], seed: int) -> Dict[str, Any]:
     player_cfg = dict(player_cfg)
     player_cfg["hp"] = player_hp
 
-    rpg_cfg["player"] = player_cfg
-    rpg_cfg["spider"] = spider_cfg
-    cfg["RPG"] = rpg_cfg
+    task_cfg["player"] = player_cfg
+    task_cfg["spider"] = spider_cfg
+    cfg["task"] = task_cfg
 
     rpg_state = {
         "player_hp": player_hp,
@@ -225,9 +228,9 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
     def _allowed_blocks(item: Dict[str, Any], overrides: List[str]) -> List[str]:
         if overrides:
             return unique_block_list(overrides)
-        palette = item.get("palette") or {}
-        if isinstance(palette, dict):
-            return unique_block_list(palette.values())
+        inventory = item.get("inventory") or {}
+        if isinstance(inventory, dict):
+            return unique_block_list(inventory.values())
         return []
 
     def _format_resource_limits(task: TaskSpec) -> str:
@@ -237,7 +240,7 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
         if not limits:
             return ""
         lines: List[str] = []
-        for _key, block in task.palette.items():
+        for _key, block in task.inventory.items():
             block_norm = normalize_block_id(block)
             if block_norm in ("air", "cave_air", "void_air"):
                 continue
@@ -256,19 +259,19 @@ def _build_formatters(cfg: Dict[str, Any], *, num_agents: int, tokenizer: Any | 
 
         w_from = item.get("local_bbox_from") or [0, 0, 0]
         w_to = item.get("local_bbox_to") or [0, 0, 0]
-        palette = item.get("palette") or {}
+        inventory = item.get("inventory") or {}
         layers_by_y = item.get("layers_by_y") or {}
 
         task = TaskSpec(
             task_id=str(item.get("task_id") or ""),
             local_bbox_from=[int(v) for v in w_from],
             local_bbox_to=[int(v) for v in w_to],
-            palette={str(k): str(v) for k, v in palette.items()},
+            inventory={str(k): str(v) for k, v in inventory.items()},
             layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
         )
 
         layers_text = format_layers_text(task, world_from=w_from, include_air=include_air_rects)
-        legend = legend_lines(task.palette)
+        legend = legend_lines(task.inventory)
 
         allowed_blocks_agent1 = _allowed_blocks(item, block_agent1_override)
         allowed_blocks_agent2 = _allowed_blocks(item, block_agent2_override)
@@ -371,7 +374,7 @@ def main() -> int:
                 "dataset_index": idx,
                 "local_bbox_from": t.local_bbox_from,
                 "local_bbox_to": t.local_bbox_to,
-                "palette": t.palette,
+                "inventory": t.inventory,
                 "layers_by_y": {str(k): [str(r) for r in v] for k, v in t.layers_by_y.items()},
                 "prompt": f"house_builder:{t.task_id}",
             }
@@ -393,18 +396,13 @@ def main() -> int:
     model_name = str(model_cfg.get("name") or "")
     if not model_name:
         raise ValueError("model.name is required")
-    tokenizer_kwargs = model_cfg.get("tokenizer_kwargs") or {}
-    model_kwargs = model_cfg.get("model_kwargs") or {}
-    if not isinstance(tokenizer_kwargs, dict):
-        tokenizer_kwargs = {}
-    if not isinstance(model_kwargs, dict):
-        model_kwargs = {}
+    model_kwargs: Dict[str, Any] = {}
 
-    dtype = _map_dtype(model_cfg.get("dtype") or model_cfg.get("torch_dtype") or model_kwargs.get("torch_dtype"))
-    if dtype is not None and "torch_dtype" not in model_kwargs:
+    dtype = _map_dtype(model_cfg.get("dtype") or model_cfg.get("torch_dtype"))
+    if dtype is not None:
         model_kwargs["torch_dtype"] = dtype
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_kwargs)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -438,14 +436,14 @@ def main() -> int:
     def _layers_key_from_item(item: Mapping[str, Any]) -> str:
         w_from = item.get("local_bbox_from") or [0, 0, 0]
         w_to = item.get("local_bbox_to") or [0, 0, 0]
-        palette = item.get("palette") or {}
+        inventory = item.get("inventory") or {}
         layers_by_y = item.get("layers_by_y") or {}
         try:
             task = TaskSpec(
                 task_id=str(item.get("task_id") or ""),
                 local_bbox_from=[int(v) for v in w_from],
                 local_bbox_to=[int(v) for v in w_to],
-                palette={str(k): str(v) for k, v in palette.items()},
+                inventory={str(k): str(v) for k, v in inventory.items()},
                 layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
             )
             layers_text = format_layers_text(task, world_from=w_from, include_air=include_air_rects)
@@ -589,13 +587,17 @@ def main() -> int:
     import LLM_Collab_Minecraft.house_builder.external as external_mod  # type: ignore
 
     external_mod.VERBOSE = bool(output_verbose)
-    apply_default_patches(cfg)
 
     is_multi_turn = False
     try:
         is_multi_turn = int(getattr(iac_args, "num_turns", 1)) > 1
     except Exception:
         is_multi_turn = False
+    critic_model_kwargs: Dict[str, Any] = {}
+    if isinstance(critic_cfg, dict):
+        critic_dtype = _map_dtype(critic_cfg.get("dtype") or critic_cfg.get("torch_dtype"))
+        if critic_dtype is not None:
+            critic_model_kwargs["torch_dtype"] = critic_dtype
 
     trainer_kwargs: Dict[str, Any] = {
         "model": model_name,
@@ -606,9 +608,8 @@ def main() -> int:
         "train_dataset": train_ds,
         "eval_dataset": eval_ds,
         "model_config": {
-            "tokenizer_kwargs": tokenizer_kwargs,
             "model_kwargs": model_kwargs,
-            "critic_model_kwargs": critic_cfg.get("model_kwargs", {}),
+            "critic_model_kwargs": critic_model_kwargs,
             "critic_value_head_hidden_dim": iac_cfg.get("critic_value_head_hidden_dim"),
             "value_head_hidden_dim": iac_cfg.get("value_head_hidden_dim"),
         },
@@ -662,9 +663,9 @@ def main() -> int:
         def _allowed_blocks(item: Dict[str, Any], overrides: List[str]) -> List[str]:
             if overrides:
                 return unique_block_list(overrides)
-            palette = item.get("palette") or {}
-            if isinstance(palette, dict):
-                return unique_block_list(palette.values())
+            inventory = item.get("inventory") or {}
+            if isinstance(inventory, dict):
+                return unique_block_list(inventory.values())
             return []
 
         rpg_kwargs = _rpg_placeholders(cfg)
@@ -684,21 +685,21 @@ def main() -> int:
                     continue
                 w_from = item.get("local_bbox_from") or [0, 0, 0]
                 w_to = item.get("local_bbox_to") or [0, 0, 0]
-                palette = item.get("palette") or {}
+                inventory = item.get("inventory") or {}
                 layers_by_y = item.get("layers_by_y") or {}
 
                 task = TaskSpec(
                     task_id=str(item.get("task_id") or ""),
                     local_bbox_from=[int(v) for v in w_from],
                     local_bbox_to=[int(v) for v in w_to],
-                    palette={str(k): str(v) for k, v in palette.items()},
+                    inventory={str(k): str(v) for k, v in inventory.items()},
                     layers_by_y={int(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
                 )
                 layers_text = format_layers_text(task, world_from=w_from, include_air=include_air_rects)
-                legend = legend_lines(task.palette)
+                legend = legend_lines(task.inventory)
                 resource_limits = compute_resource_limits(task, num_agents=num_agents) if limited_resource else {}
                 resource_limits_lines: List[str] = []
-                for _key, block in task.palette.items():
+                for _key, block in task.inventory.items():
                     block_norm = normalize_block_id(block)
                     if block_norm in ("air", "cave_air", "void_air"):
                         continue
@@ -744,7 +745,7 @@ def main() -> int:
                     "task_id": str(item.get("task_id") or ""),
                     "local_bbox_from": [int(v) for v in (w_from or [0, 0, 0])],
                     "local_bbox_to": [int(v) for v in (w_to or [0, 0, 0])],
-                    "palette": {str(k): str(v) for k, v in (palette or {}).items()},
+                    "inventory": {str(k): str(v) for k, v in (inventory or {}).items()},
                     "layers_by_y": {str(k): [str(r) for r in v] for k, v in (layers_by_y or {}).items()},
                     "allowed_blocks_agent1": list(allowed_blocks_agent1),
                     "allowed_blocks_agent2": list(allowed_blocks_agent2),
@@ -779,10 +780,6 @@ def main() -> int:
         original_prompt_flag = bool(external_cfg.get("original_prompt", True))
         previous_response_flag = bool(external_cfg.get("previous_response", False))
         modification_limit = external_cfg.get("lim")
-        if modification_limit is None:
-            modification_limit = external_cfg.get("modification_limit")
-        common_prefix = external_cfg.get("common_prefix")
-        common_suffix = external_cfg.get("common_suffix")
 
         num_agents_default = int(num_agents)
 
@@ -798,8 +795,6 @@ def main() -> int:
                 limit=modification_limit,
                 original_prompt=original_prompt_flag,
                 previous_response=previous_response_flag,
-                common_prefix=common_prefix,
-                common_suffix=common_suffix,
                 prompt_history_per_agent=prompt_history,
                 response_history_per_agent=response_history,
             )

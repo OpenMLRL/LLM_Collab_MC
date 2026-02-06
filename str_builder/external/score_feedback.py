@@ -21,16 +21,14 @@ def _as_int_list(value: Any, default: List[int]) -> List[int]:
     return list(default)
 
 
-def _as_block_list(value: Any, fallback: List[str]) -> List[str]:
+def _as_block_list(value: Any) -> List[str]:
     if isinstance(value, (list, tuple)):
-        blocks = [str(v).strip() for v in value if str(v).strip()]
-        if blocks:
-            return blocks
+        return [str(v).strip() for v in value if str(v).strip()]
     if value is not None:
         s = str(value).strip()
         if s:
             return [s]
-    return list(fallback)
+    return []
 
 
 def _task_from_ctx(ctx: Dict[str, Any]) -> TaskSpec:
@@ -60,8 +58,12 @@ def _compute_reward(ctx: Dict[str, Any], agent_completions: List[str], num_agent
     max_commands_total = int(ctx.get("max_commands_total") or 600)
     max_limits = _split_limits(max_commands_total, n)
 
-    allowed_blocks_agent1 = _as_block_list(ctx.get("allowed_blocks_agent1"), ["black_concrete", "white_concrete"])
-    allowed_blocks_agent2 = _as_block_list(ctx.get("allowed_blocks_agent2"), ["red_concrete"])
+    allowed_blocks_agent1 = _as_block_list(ctx.get("allowed_blocks_agent1"))
+    if not allowed_blocks_agent1:
+        raise ValueError("allowed_blocks_agent1 must be provided and non-empty")
+    allowed_blocks_agent2 = _as_block_list(ctx.get("allowed_blocks_agent2"))
+    if n >= 2 and not allowed_blocks_agent2:
+        raise ValueError("allowed_blocks_agent2 must be provided when num_agents >= 2")
     allowed_blocks_per_agent = [allowed_blocks_agent1]
     if n >= 2:
         allowed_blocks_per_agent.append(allowed_blocks_agent2)

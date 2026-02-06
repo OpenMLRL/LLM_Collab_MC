@@ -4,14 +4,7 @@ model:
   temperature: 0.6
   top_p: 0.6
   max_length: 2048
-  tokenizer_kwargs: {}
-  model_kwargs:
-    trust_remote_code: true
-    device_map: auto
-    low_cpu_mem_usage: true
-    attn_implementation: sdpa
   dtype: bf16
-  gradient_checkpointing: false
 
 dataset:
   name: str_builder
@@ -70,18 +63,6 @@ prompt:
   use_chat_template: true
 
 task:
-  block_agent1: [black_concrete, green_concrete]
-  block_agent2: [white_concrete, red_concrete]
+  block_agent1: [oak_planks, stone, air]
+  block_agent2: [white_concrete, obsidian, air]
   max_commands: 300
-
-debug:
-  enabled: true
-  max_prints: 1000
-  every_n_calls: 5
-  empty_char: "."
-  raw_output: true
-
-patches:
-  generation_memory: true
-  single_agent_returns: true
-  force_sampling: true

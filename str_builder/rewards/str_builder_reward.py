@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 from typing import Any, Callable, Dict, List, Mapping
 
 from LLM_Collab_Minecraft.str_builder.utils.str_builder import (
     TaskSpec,
+    block_to_color_key,
     build_target_color_map,
     extract_command_lines,
     normalize_block_id,
@@ -80,11 +80,11 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
 
     allowed_blocks_agent1 = _as_block_list(task_cfg.get("block_agent1"))
     if not allowed_blocks_agent1:
-        allowed_blocks_agent1 = ["black_concrete", "white_concrete"]
+        raise ValueError("task.block_agent1 must be provided and non-empty")
 
     allowed_blocks_agent2 = _as_block_list(task_cfg.get("block_agent2"))
-    if not allowed_blocks_agent2:
-        allowed_blocks_agent2 = ["red_concrete"]
+    if num_agents >= 2 and not allowed_blocks_agent2:
+        raise ValueError("task.block_agent2 must be provided when num_agents >= 2")
 
     allowed_blocks_per_agent = [allowed_blocks_agent1]
     if num_agents >= 2:
@@ -95,26 +95,21 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
         output_cfg = {}
     output_verbose = bool(output_cfg.get("verbose", False))
 
-    debug_cfg = cfg.get("debug") or {}
-    if not isinstance(debug_cfg, dict):
-        debug_cfg = {}
-
-    debug_enabled = (bool(debug_cfg.get("enabled", False)) or (os.environ.get("STR_BUILDER_DEBUG_ASCII") == "1")) and output_verbose
-    debug_max_prints = _as_int(debug_cfg.get("max_prints"), 0)
-    if debug_enabled and debug_max_prints <= 0:
-        debug_max_prints = 10
-    debug_every_n_calls = _as_int(debug_cfg.get("every_n_calls"), 0)
-    debug_empty_char = str(debug_cfg.get("empty_char") or ".")[:1] or "."
-    debug_raw_output = bool(debug_cfg.get("raw_output", False))
-
-    debug_state = {"calls": 0, "printed": 0}
+    debug_enabled = output_verbose
+    debug_empty_char = "."
+    debug_raw_output = False
 
     def _block_to_color_initial(block_id: str) -> str:
-        s = normalize_block_id(str(block_id or "")).lower()
-        if not s:
-            return "#"
-        color = s.split("_", 1)[0]
-        return (color[:1] or s[:1] or "#").upper()
+        key = block_to_color_key(block_id)
+        if key == "wood":
+            return "W"
+        if key == "stone":
+            return "S"
+        if key == "concrete":
+            return "C"
+        if key == "obsidian":
+            return "O"
+        return (key[:1] or "#").upper()
 
     def _render_overlay(task: TaskSpec, obs_map: Mapping[tuple[int, int, int], str]) -> str:
         height = len(task.target_rows_topdown)
@@ -148,12 +143,6 @@ def get_reward_function(*, cfg: Dict[str, Any], num_agents: int) -> Callable[...
     ) -> None:
         if not debug_enabled:
             return
-        debug_state["calls"] += 1
-        if debug_state["printed"] >= debug_max_prints:
-            return
-        if debug_every_n_calls > 0 and (debug_state["calls"] % debug_every_n_calls) != 0:
-            return
-        debug_state["printed"] += 1
         turn_str = f" turn={int(turn_idx)}" if turn_idx is not None else ""
         coverage = float(metrics.get("coverage_ratio", metrics.get("accuracy", 0.0)))
         extra_ratio = float(metrics.get("extra_ratio", 0.0))
