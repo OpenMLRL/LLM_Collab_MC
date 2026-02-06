@@ -297,10 +297,6 @@ def block_to_color_key(block_id: str) -> str:
     return s
 
 
-def render_target_ascii(task: TaskSpec) -> str:
-    return "\n".join(str(r) for r in (task.target_rows_topdown or []))
-
-
 def get_target_positions(task: TaskSpec) -> List[Tuple[int, int, int]]:
     height = len(task.target_rows_topdown)
     width = len(task.target_rows_topdown[0]) if height else 0
